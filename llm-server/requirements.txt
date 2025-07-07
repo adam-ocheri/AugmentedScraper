@@ -1,0 +1,4 @@
+ollama==0.5.1
+redis==6.2.0
+fastapi
+uvicorn

@@ -1,0 +1,21 @@
+
+services:
+  redis:
+    image: redis:7
+    container_name: redis
+    ports:
+      - "6379:6379"
+
+  go-api:
+    build: ./backend
+    container_name: go-api
+    ports:
+      - "8080:8080"
+    depends_on:
+      - redis
+
+  python-worker:
+    build: ./llm-server
+    container_name: python-worker
+    depends_on:
+      - redis
