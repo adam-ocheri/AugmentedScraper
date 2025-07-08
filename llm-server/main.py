@@ -7,6 +7,55 @@ import threading
 from fastapi import FastAPI
 import uvicorn
 from contextlib import asynccontextmanager
+import requests
+from urllib.parse import urlparse
+from bs4 import BeautifulSoup
+from ollama import Client
+
+
+class ModelInterface:
+    def __init__(self, model_name: str, use_memory: bool = False):
+        self.client = Client(host="http://ollama:11434")
+        self.model_name = model_name
+
+        # TODO: Implement optional memory
+        self.use_memory = use_memory
+        self.memory = []
+
+    def get_model(self) -> str:
+        return self.client.models.get(self.model_name)
+
+    def generate_text(self, instruction, text) -> str:
+        logging.info(f"Generating text for model: {self.model_name}")
+        response = self.client.chat(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": instruction,
+                },
+                {
+                    "role": "user",
+                    "content": text,
+                },
+            ],
+        )
+        logging.info(f"LLM response: {response['message']['content']}")
+        return response["message"]["content"]
+
+    def process_article(self, article_text):
+        SUMMARY_INSTRUCTION = "You will be given a the text contents of a scraped webpage at the given url. You will then need to generate a summary of the webpage, and the sentiment of the webpage."
+        SENTIMENT_INSTRUCTION = "You will be the summary of an article. You will then need to generate a sentiment of the webpage."
+
+        summary = self.generate_text(SUMMARY_INSTRUCTION, article_text)
+        sentiment = self.generate_text(SENTIMENT_INSTRUCTION, summary)
+        return {
+            "summary": summary,
+            "sentiment": sentiment,
+        }
+
+
+LLM = ModelInterface("llama3.1:8b")
 
 # Configure logging to output to stdout
 logging.basicConfig(
@@ -31,6 +80,31 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+
+def is_valid_url(url: str) -> bool:
+    """Check if the given string is a valid URL"""
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
+
+
+def scrape_url(url: str) -> str:
+    """Scrape the text contents of the webpage at the given url"""
+    if not is_valid_url(url):
+        raise ValueError("Invalid URL")
+
+    response = requests.get(url)
+    if response.status_code != 200:
+        raise ValueError("Failed to fetch the URL")
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    text = soup.get_text()
+    logging.info(f"Scraped text: {text}")
+
+    return text
 
 
 def redis_worker():
@@ -59,18 +133,20 @@ def redis_worker():
                     r.set(url_task_key, json.dumps(url_task))
 
                 # Simulate AI processing delay
-                time.sleep(3)
+                text = scrape_url(url)
+                result = LLM.process_article(text)
 
                 # Generate result (this is where you'd integrate with your actual LLM)
                 result = {
                     "url": url,
-                    "summary": f"AI-generated summary of {url}",
-                    "sentiment": "positive",
-                    "key_points": [
-                        f"Key point 1 about {url}",
-                        f"Key point 2 about {url}",
-                        f"Key point 3 about {url}",
-                    ],
+                    "summary": result["summary"],
+                    "sentiment": result["sentiment"],
+                    # "result": result,
+                    # "key_points": [
+                    #     f"Key point 1 about {url}",
+                    #     f"Key point 2 about {url}",
+                    #     f"Key point 3 about {url}",
+                    # ],
                     "processed_at": time.time(),
                 }
 
