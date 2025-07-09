@@ -12,6 +12,6 @@ namespace db_service.Models
         public string Url { get; set; }
         public string Summary { get; set; }
         public string Sentiment { get; set; }
-        // public List<ConversationEntry> Conversation { get; set; }
+        public List<ConversationEntry> Conversation { get; set; } = new List<ConversationEntry>();
     }
 } 

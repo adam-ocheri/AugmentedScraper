@@ -27,7 +27,7 @@ namespace db_service.Controllers
         {
             _logger.LogInformation("Received GET /article request for URL: {Url}", url);
             var article = await _context.ArticleResults
-                // .Include(a => a.Conversation)
+                .Include(a => a.Conversation)
                 .FirstOrDefaultAsync(a => a.Url == url);
             if (article == null)
             {

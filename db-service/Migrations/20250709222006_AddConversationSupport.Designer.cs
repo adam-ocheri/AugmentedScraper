@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using db_service.Data;
@@ -11,9 +12,11 @@ using db_service.Data;
 namespace db_service.Migrations
 {
     [DbContext(typeof(ArticleContext))]
-    partial class ArticleContextModelSnapshot : ModelSnapshot
+    [Migration("20250709222006_AddConversationSupport")]
+    partial class AddConversationSupport
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

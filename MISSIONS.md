@@ -44,26 +44,29 @@
 
 # MISSION 9 | Status: Pending | Details: Add some check in the llm-server to know when the ollama model has finished downloading and is ready for use. Then it should POST to a route in the go backend `/inform-model-loaded`, and add a websocket callback to update the frontend, informing it that it is now allowed to make requests and start (it should not allow users use the system while the model is still downloading - it should display a nice loading animation instead)
 
-# MISSION 10 | Status: Pending | Details: Frontend needs to display all articles/tasks on a side panel as a list of buttons
+# MISSION 10 | Status: Completed | Details: Frontend needs to display all articles/tasks on a side panel as a list of buttons
 
     - A) Instead of a `result` state, there should be `activeArticle` state
     - B) When a button is clicked, the UI updates the currently displayed `activeArticle` to the corresponding article/task that belongs to the button
     - C) Then there might be a need for a `useEffect` that is triggered when the `activeArticle` has been changed, to fetch that article/task from the backend
     - D) NOTE: since users may make concurrent requests, need to make sure that the `activeArticle` is only updated via the websocket (instead of the old `result` state) only if the `activeArticle.uuid === payload.uuid`
 
-# MISSION 11 | Status: Pending | Details: Potential issue with concurrent requests - the python subscriber worker can potentially become stuck when trying to process multiple requests number exceeding the "OLLAMA_MAX_THREADS" or whatever that env var's name is. So there should probably be a refactor moving that bit of code to run on a background thread, clearing the pubsub loop to be able to process newly incoming events without a huckle.
+# MISSION 11 | Status: Pending | Details: add full support for having a conversation after getting result from article
+
+    - A) Add support for the `ConversationEntry` so that conversation data can be stored in the DB and Redis cache
+    - B) Once added conversations array to the DB/Cache data structures, ensure that nothing breaks in the current implementation
+    - C) Add ChromaDB and embeddings logic to make each prompt have the additional context it needs for a better answer
+        - Add in the ollama-entrypoint.sh commands loading an embedding model, and refactor the ModelInterface class to support internally the embedding model
+        - Add chromadb to the requirements.txt to have the package installed, and add a container in the docker-compose.yml setup with the chromadb image
+        - Once a new article is processed, the article text needs to be embedded and stored in chromadb (but also think how would you relate it to to the DB/Cache data, probably every article stored in chromadb needs to have the same uuid as the Task uuid)
+        - On `ModelInterface.chat` need to query the vector db and add aditional context to the user's prompt
+    - D) Add frontend support for the conversation
+    - E) OPTIONAL - Try adding another LLM step that attempts to clean the article text from unrelated text, since we are using a dirty web scrape
+        + This means to simply add another prompt process with a prompt like `model.generate_text(text, "I am sending you a text of a scraped web page article. Please identify if there are unnecessary and unrelated characters, words or sentences that does")`
+
+# MISSION 12 | Status: Pending | Details: Potential issue with concurrent requests - the python subscriber worker can potentially become stuck when trying to process multiple requests number exceeding the "OLLAMA_MAX_THREADS" or whatever that env var's name is. So there should probably be a refactor moving that bit of code to run on a background thread, clearing the pubsub loop to be able to process newly incoming events without a huckle.
 
     - A) Ollama has an internal queue keeping requests exceeding num "OLLAMA_MAX_THREADS" in it, but need to ensure there isn't a way for it to break (research if ollama has a cache folder you can add to a volume, if it includes the internal queue data)
-
-# MISSION 12 | Status: Pending | Details: I want to add full support for having a conversation after getting result from article
-
-    - A) Update frontend to allow engaging in a conversation for each url context;
-        + Frontend should display a list of all cached and non-cached results (like chat gpt conversations history)
-        + If something is retrived from non-cache (the DB), then cache it again with EXPIRE settings
-    - B) Try adding another LLM step that attempts to clean the article text from unrelated text, since we are using a dirty web scrape
-        + This means to simply add another prompt process with a prompt like `model.generate_text(text, "I am sending you a text of a scraped web page article. Please identify if there are unnecessary and unrelated characters, words or sentences that does")`
-    - C) Add ChromaDB and embeddings logic to make each prompt have the additional context it needs for a better answer
-    - D) For each prompt the user sends, that prompt needs to be used to search the vector db, to make each prompt have the additional context it needs for a better answer
 
 # MISSION 13 | Status: Pending | Details: For a better UX, can make the frontend notify the user about the stages of the processing of his request (for example, "Reading URL contents...", "Cleaning article from unrelated text...", "generating summary...", "generating sentiment...")
 

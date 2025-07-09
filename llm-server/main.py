@@ -14,13 +14,16 @@ from ollama import Client
 
 
 class ModelInterface:
-    def __init__(self, model_name: str, use_memory: bool = False):
+    def __init__(self, model_name: str):
         self.client = Client(host="http://ollama:11434")
         self.model_name = model_name
 
-        # TODO: Implement optional memory
-        self.use_memory = use_memory
-        self.memory = []
+        self.memory = [
+            {
+                "role": "system",
+                "content": "You are a helpful assistant that can answer questions and help with tasks.",
+            }
+        ]
 
     def get_model(self) -> str:
         return self.client.models.get(self.model_name)
@@ -40,6 +43,21 @@ class ModelInterface:
                 },
             ],
         )
+        logging.info(f"LLM response: {response['message']['content']}")
+        return response["message"]["content"]
+
+    def chat(self, text) -> str:
+        logging.info(f"Generating text for model: {self.model_name}")
+
+        # TODO: here will want to apply vector search on the article text to find relevant context
+
+        self.memory.append(
+            {
+                "role": "user",
+                "content": text,
+            }
+        )
+        response = self.client.chat(model=self.model_name, messages=self.memory)
         logging.info(f"LLM response: {response['message']['content']}")
         return response["message"]["content"]
 
@@ -117,6 +135,7 @@ def process_article(url: str, url_task_data: str, url_task_key: str, task_uuid: 
         "url": url,
         "summary": result["summary"],
         "sentiment": result["sentiment"],
+        "conversation": [],  # Initialize empty conversation array
         # "result": result,
         # "key_points": [
         #     f"Key point 1 about {url}",
@@ -186,6 +205,7 @@ def redis_worker():
                     "url": url,
                     "summary": result["summary"],
                     "sentiment": result["sentiment"],
+                    "conversation": [],  # Initialize empty conversation array
                     # "result": result,
                     # "key_points": [
                     #     f"Key point 1 about {url}",
