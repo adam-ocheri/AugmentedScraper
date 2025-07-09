@@ -1,13 +1,13 @@
 services:
   redis:
     image: redis:7
-    container_name: redis
+    container_name: redis-dev
     ports:
       - "6379:6379"
 
   ollama:
     image: ollama/ollama:latest
-    container_name: ollama
+    container_name: ollama-dev
     ports:
       - "11434:11434"
     volumes:
@@ -27,7 +27,7 @@ services:
 
   backend:
     build: ./backend
-    container_name: backend
+    container_name: backend-dev
     ports:
       - "8080:8080"
     depends_on:
@@ -35,7 +35,7 @@ services:
 
   llm-server:
     build: ./llm-server
-    container_name: llm-server
+    container_name: llm-server-dev
     depends_on:
       - redis
       - ollama
@@ -44,41 +44,20 @@ services:
       - OLLAMA_MODEL=llama2:13b
 
   frontend:
-    build: ./frontend
-    container_name: frontend
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: frontend-dev
     ports:
       - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8080
       - NEXT_PUBLIC_WS_URL=ws://localhost:8080
 
-  db-service:
-    build: ./db-service
-    container_name: db-service
-    ports:
-      - "5000:5000"
-    depends_on:
-      - postgres
-    environment:
-      - ASPNETCORE_ENVIRONMENT=Development
-      - ASPNETCORE_URLS=http://+:5000
-      - ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=articlesdb;Username=postgres;Password=yourpassword
-
-  postgres:
-    image: postgres:15
-    container_name: postgres
-    restart: always
-    environment:
-      POSTGRES_DB: articlesdb
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: yourpassword
-    ports:
-      - "5432:5432"
-    # volumes:
-    #   - postgres_data:/var/lib/postgresql/data
-
 volumes:
-  ollama_data:
-  postgres_data:
+  ollama_data: 

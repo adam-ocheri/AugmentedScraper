@@ -2,3 +2,5 @@ llm-server/env
 llm-server/__pycache__
 frontend/node_modules
 .cursor
+db-service/obj
+db-service/bin

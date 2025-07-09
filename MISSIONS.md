@@ -15,9 +15,17 @@
 
 # MISSION 3 | Status: Completed | Details: Add Ollama integration to actually get generative results
 
-# MISSION 4 | Status: Pending | Details: Add websocket to the Go backend, and add a push notifications to realtime update channel once `process:results` is triggered
+# MISSION 4 | Status: Completed | Details: Add websocket to the Go backend, and add a push notifications to realtime update channel once `process:results` is triggered
 
-# MISSION 5 | Status: Pending | Details: Create frontend ui to support the system
+# MISSION 5 | Status: Completed | Details: Create frontend ui to support the system
+
+    - A) Created a modern React frontend with Next.js and Tailwind CSS
+    - B) Added Dockerfile for production deployment
+    - C) Added Dockerfile.dev for development with hot reloading
+    - D) Integrated with docker-compose.yml for complete system orchestration
+    - E) Implemented real-time WebSocket updates for task status
+    - F) Added task history and result display
+    - G) Created responsive UI with proper error handling
 
 # MISSION 6 | Status: Pending | Details: Add early validation to identify that the incoming string is indeed a valid URL string (at the go backend `/submit` route), and if not valid return an error message to the frontend saying "Invalid URL used!"
 
@@ -45,3 +53,11 @@
         + This means to simply add another prompt process with a prompt like `model.generate_text(text, "I am sending you a text of a scraped web page article. Please identify if there are unnecessary and unrelated characters, words or sentences that does")`
     - C) Add ChromaDB and embeddings logic to make each prompt have the additional context it needs for a better answer
     - D) For each prompt the user sends, that prompt needs to be used to search the vector db, to make each prompt have the additional context it needs for a better answer
+
+# MISSION 12 | Status: Pending | Details: For a better UX, can make the frontend notify the user about the stages of the processing of his request (for example, "Reading URL contents...", "Cleaning article from unrelated text...", "generating summary...", "generating sentiment...")
+
+    - A) This means creating websocket/pubsub callbacks for each of these steps
+    - B) These callbacks would need to be triggered by the llm-server, pushing messages to the backend server
+    - C) The backend server then forwards these messages to the front
+
+# MISSION 13 | Status: Pending | Details: Frontend should also be able to return cache hit! Right now it waits only for the websocket to return the data

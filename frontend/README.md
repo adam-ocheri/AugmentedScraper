@@ -1,36 +1,108 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Frontend - Content Analysis System
 
-## Getting Started
+This is the frontend application for the Content Analysis System, built with Next.js and React.
 
-First, run the development server:
+## Features
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Submit URLs for content analysis
+- Real-time status updates via WebSocket
+- Task history and results display
+- Modern, responsive UI with Tailwind CSS
+- Docker support for both development and production
+
+## Development
+
+### Prerequisites
+
+- Node.js 18 or higher
+- Docker and Docker Compose (for containerized development)
+
+### Local Development
+
+1. Install dependencies:
+
+   ```bash
+   npm install
+   ```
+
+2. Start the development server:
+
+   ```bash
+   npm run dev
+   ```
+
+3. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+### Docker Development
+
+1. Start all services in development mode:
+
+   ```bash
+   docker-compose -f docker-compose.dev.yml up --build
+   ```
+
+2. The frontend will be available at [http://localhost:3000](http://localhost:3000)
+
+### Production
+
+1. Build and start all services:
+
+   ```bash
+   docker-compose up --build
+   ```
+
+2. The frontend will be available at [http://localhost:3000](http://localhost:3000)
+
+## Environment Variables
+
+- `NEXT_PUBLIC_API_URL`: Backend API URL (default: http://localhost:8080)
+- `NEXT_PUBLIC_WS_URL`: WebSocket URL (default: ws://localhost:8080)
+
+## Project Structure
+
+```
+frontend/
+├── src/
+│   └── app/
+│       ├── page.tsx          # Main application page
+│       ├── layout.tsx        # Root layout
+│       └── globals.css       # Global styles
+├── public/                   # Static assets
+├── Dockerfile               # Production Dockerfile
+├── Dockerfile.dev           # Development Dockerfile
+└── package.json             # Dependencies and scripts
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Available Scripts
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- `npm run dev`: Start development server
+- `npm run build`: Build for production
+- `npm run start`: Start production server
+- `npm run lint`: Run ESLint
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## API Integration
 
-## Learn More
+The frontend communicates with the backend through:
 
-To learn more about Next.js, take a look at the following resources:
+1. **HTTP API**: For submitting URLs and getting initial responses
+2. **WebSocket**: For real-time status updates and task completion notifications
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### API Endpoints
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- `POST /submit`: Submit a URL for analysis
+- `GET /status/{uuid}`: Get task status (if needed)
+- `WS /ws`: WebSocket connection for real-time updates
 
-## Deploy on Vercel
+## WebSocket Message Format
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The frontend expects WebSocket messages in the following format:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```json
+{
+  "type": "task_update",
+  "uuid": "task-uuid",
+  "status": "SUCCESS|FAILED|WORKING",
+  "summary": "Article summary...",
+  "sentiment": "Positive/Negative/Neutral"
+}
+```

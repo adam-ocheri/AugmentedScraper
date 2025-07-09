@@ -44,8 +44,8 @@ class ModelInterface:
         return response["message"]["content"]
 
     def process_article(self, article_text):
-        SUMMARY_INSTRUCTION = "You will be given a the text contents of a scraped webpage at the given url. You will then need to generate a summary of the webpage, and the sentiment of the webpage."
-        SENTIMENT_INSTRUCTION = "You will be the summary of an article. You will then need to generate a sentiment of the webpage."
+        SUMMARY_INSTRUCTION = "You will be given a the text contents of a scraped webpage at the given url. You will then need to generate a summary of the webpage, and return the result as a Markdown string."
+        SENTIMENT_INSTRUCTION = "You will be the summary of an article. You will then need to generate a sentiment of the webpage; return only the sentiment, no other text (e.g. 'positive', 'negative', 'neutral')"
 
         summary = self.generate_text(SUMMARY_INSTRUCTION, article_text)
         sentiment = self.generate_text(SENTIMENT_INSTRUCTION, summary)
