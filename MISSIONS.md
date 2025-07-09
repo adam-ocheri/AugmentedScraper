@@ -51,7 +51,11 @@
     - C) Then there might be a need for a `useEffect` that is triggered when the `activeArticle` has been changed, to fetch that article/task from the backend
     - D) NOTE: since users may make concurrent requests, need to make sure that the `activeArticle` is only updated via the websocket (instead of the old `result` state) only if the `activeArticle.uuid === payload.uuid`
 
-# MISSION 11 | Status: Pending | Details: I want to add full support for having a conversation after getting result from article
+# MISSION 11 | Status: Pending | Details: Potential issue with concurrent requests - the python subscriber worker can potentially become stuck when trying to process multiple requests number exceeding the "OLLAMA_MAX_THREADS" or whatever that env var's name is. So there should probably be a refactor moving that bit of code to run on a background thread, clearing the pubsub loop to be able to process newly incoming events without a huckle.
+
+    - A) Ollama has an internal queue keeping requests exceeding num "OLLAMA_MAX_THREADS" in it, but need to ensure there isn't a way for it to break (research if ollama has a cache folder you can add to a volume, if it includes the internal queue data)
+
+# MISSION 12 | Status: Pending | Details: I want to add full support for having a conversation after getting result from article
 
     - A) Update frontend to allow engaging in a conversation for each url context;
         + Frontend should display a list of all cached and non-cached results (like chat gpt conversations history)
@@ -61,10 +65,10 @@
     - C) Add ChromaDB and embeddings logic to make each prompt have the additional context it needs for a better answer
     - D) For each prompt the user sends, that prompt needs to be used to search the vector db, to make each prompt have the additional context it needs for a better answer
 
-# MISSION 12 | Status: Pending | Details: For a better UX, can make the frontend notify the user about the stages of the processing of his request (for example, "Reading URL contents...", "Cleaning article from unrelated text...", "generating summary...", "generating sentiment...")
+# MISSION 13 | Status: Pending | Details: For a better UX, can make the frontend notify the user about the stages of the processing of his request (for example, "Reading URL contents...", "Cleaning article from unrelated text...", "generating summary...", "generating sentiment...")
 
     - A) This means creating websocket/pubsub callbacks for each of these steps
     - B) These callbacks would need to be triggered by the llm-server, pushing messages to the backend server
     - C) The backend server then forwards these messages to the front
 
-# MISSION 13 | Status: Pending | Details: Frontend should also be able to return cache hit! Right now it waits only for the websocket to return the data || or maybe it should return a message saying 'already exists' to not over-complicate things
+# MISSION 14 | Status: Pending | Details: Frontend should also be able to return cache hit! Right now it waits only for the websocket to return the data || or maybe it should return a message saying 'already exists' to not over-complicate things

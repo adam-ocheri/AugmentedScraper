@@ -107,6 +107,51 @@ def scrape_url(url: str) -> str:
     return text
 
 
+# TODO: Refactor this to run on a background thread
+def process_article(url: str, url_task_data: str, url_task_key: str, task_uuid: str):
+    text = scrape_url(url)
+    result = LLM.process_article(text)
+
+    # Generate result (this is where you'd integrate with your actual LLM)
+    result = {
+        "url": url,
+        "summary": result["summary"],
+        "sentiment": result["sentiment"],
+        # "result": result,
+        # "key_points": [
+        #     f"Key point 1 about {url}",
+        #     f"Key point 2 about {url}",
+        #     f"Key point 3 about {url}",
+        # ],
+        "processed_at": time.time(),
+    }
+
+    # Convert result to JSON string for caching
+    result_json = json.dumps(result)
+
+    # MISSION 1.C: Cache the result
+    cache_key = f"cache:{url}"
+    r.set(cache_key, result_json)
+    logging.info(f"Cached result for URL: {url}")
+
+    # Update task status to "done"
+    r.set(f"status:{task_uuid}", "done")
+
+    # Update URL task mapping to "done"
+    if url_task_data:
+        url_task = json.loads(url_task_data)
+        url_task["status"] = "done"
+        r.set(url_task_key, json.dumps(url_task))
+
+    # Publish result to results channel (for real-time updates if needed)
+    r.publish(
+        "process:results",
+        json.dumps({"uuid": task_uuid, "url": url, "result": result}),
+    )
+
+    logging.info(f"Completed task {task_uuid} for URL: {url}")
+
+
 def redis_worker():
     logging.info("LLM worker started. Listening for tasks on queue:tasks...")
     while True:
