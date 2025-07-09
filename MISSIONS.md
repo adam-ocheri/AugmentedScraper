@@ -27,15 +27,7 @@
     - F) Added task history and result display
     - G) Created responsive UI with proper error handling
 
-# MISSION 6 | Status: Pending | Details: Add early validation to identify that the incoming string is indeed a valid URL string (at the go backend `/submit` route), and if not valid return an error message to the frontend saying "Invalid URL used!"
-
-    + A) Also, will need to add validation and string manipulations to ensure we are redundantly not re-processing URLs; i.e if already have `https://www.example.com` stored, if I then add `http://www.example.com` or `www.example.com` or `example.com`, it should all be treated as the same url (because it is the SAME url)
-
-# MISSION 7 | Status: Pending | Details: Re-consider possible redundancy at the `status:` redis Key Pattern; since there is already the `url_task:` that has a status as well, and what actual use do you have for the `status/{uuid}` route anyway?
-
-# MISSION 9 | Status: Pending | Details: Add some check in the llm-server to know when the ollama model has finished downloading and is ready for use. Then it should POST to a route in the go backend `/inform-model-loaded`, and add a websocket callback to update the frontend, informing it that it is now allowed to make requests and start (it should not allow users use the system while the model is still downloading - it should display a nice loading animation instead)
-
-# MISSION 10 | Status: Pending | Details: What makes the `cache:` key actually behave like a cache? I think the caching mechanism is still a bit off
+# MISSION 6 | Status: Completed | Details: What makes the `cache:` key actually behave like a cache? I think the caching mechanism is still a bit off
 
     - A) Set cached results to EXPIRE after a set time
     - B) Add a Postgres DB to store article results (model: {"url": str, "summary": str, "sentiment" str, "conversation": Array({"role": str, "content" str})})
@@ -43,6 +35,21 @@
         + if not cached, first look if data exists in db, and if so retreive and cache it in Redis
         + if not cached and does not exist in DB, start new task
     - D) !!! Might need to add `"conversation": Array({"role": str, "content" str})` to the cache as well
+
+# MISSION 7 | Status: Pending | Details: Add early validation to identify that the incoming string is indeed a valid URL string (at the go backend `/submit` route), and if not valid return an error message to the frontend saying "Invalid URL used!"
+
+    + A) Also, will need to add validation and string manipulations to ensure we are redundantly not re-processing URLs; i.e if already have `https://www.example.com` stored, if I then add `http://www.example.com` or `www.example.com` or `example.com`, it should all be treated as the same url (because it is the SAME url)
+
+# MISSION 8 | Status: Pending | Details: Re-consider possible redundancy at the `status:` redis Key Pattern; since there is already the `url_task:` that has a status as well, and what actual use do you have for the `status/{uuid}` route anyway?
+
+# MISSION 9 | Status: Pending | Details: Add some check in the llm-server to know when the ollama model has finished downloading and is ready for use. Then it should POST to a route in the go backend `/inform-model-loaded`, and add a websocket callback to update the frontend, informing it that it is now allowed to make requests and start (it should not allow users use the system while the model is still downloading - it should display a nice loading animation instead)
+
+# MISSION 10 | Status: Pending | Details: Frontend needs to display all articles/tasks on a side panel as a list of buttons
+
+    - A) Instead of a `result` state, there should be `activeArticle` state
+    - B) When a button is clicked, the UI updates the currently displayed `activeArticle` to the corresponding article/task that belongs to the button
+    - C) Then there might be a need for a `useEffect` that is triggered when the `activeArticle` has been changed, to fetch that article/task from the backend
+    - D) NOTE: since users may make concurrent requests, need to make sure that the `activeArticle` is only updated via the websocket (instead of the old `result` state) only if the `activeArticle.uuid === payload.uuid`
 
 # MISSION 11 | Status: Pending | Details: I want to add full support for having a conversation after getting result from article
 
@@ -60,4 +67,4 @@
     - B) These callbacks would need to be triggered by the llm-server, pushing messages to the backend server
     - C) The backend server then forwards these messages to the front
 
-# MISSION 13 | Status: Pending | Details: Frontend should also be able to return cache hit! Right now it waits only for the websocket to return the data
+# MISSION 13 | Status: Pending | Details: Frontend should also be able to return cache hit! Right now it waits only for the websocket to return the data || or maybe it should return a message saying 'already exists' to not over-complicate things
