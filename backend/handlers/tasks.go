@@ -5,11 +5,36 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"backend/models"
 	"backend/services"
 )
+
+// trimUserMessage removes the context part from user messages to show only the original question
+func trimUserMessage(content string) string {
+	// Look for the pattern " to answer the following question: " and trim everything before it
+	if strings.Contains(content, " to answer the following question: ") {
+		parts := strings.Split(content, " to answer the following question: ")
+		if len(parts) > 1 {
+			return parts[1]
+		}
+	}
+	return content
+}
+
+// trimConversationMessages processes conversation entries to trim user messages
+func trimConversationMessages(conversation []models.ConversationEntry) []models.ConversationEntry {
+	trimmed := make([]models.ConversationEntry, len(conversation))
+	for i, entry := range conversation {
+		trimmed[i] = entry
+		if entry.Role == "user" {
+			trimmed[i].Content = trimUserMessage(entry.Content)
+		}
+	}
+	return trimmed
+}
 
 // HandleTasks handles task history requests
 func HandleTasks(w http.ResponseWriter, r *http.Request) {
@@ -67,10 +92,11 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 				if dbResult, err := services.GetArticleFromDBService(url); err == nil && dbResult != "" {
 					// Transform DB result to cache format
 					var dbArticle struct {
-						UUID      string `json:"uuid"`
-						URL       string `json:"url"`
-						Summary   string `json:"summary"`
-						Sentiment string `json:"sentiment"`
+						UUID         string                `json:"uuid"`
+						URL          string                `json:"url"`
+						Summary      string                `json:"summary"`
+						Sentiment    string                `json:"sentiment"`
+						Conversation []models.ConversationEntry `json:"conversation"`
 					}
 					
 					if err := json.Unmarshal([]byte(dbResult), &dbArticle); err == nil {
@@ -79,8 +105,9 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 							UUID: dbArticle.UUID,
 							URL:  dbArticle.URL,
 							Result: map[string]interface{}{
-								"summary":   dbArticle.Summary,
-								"sentiment": dbArticle.Sentiment,
+								"summary":      dbArticle.Summary,
+								"sentiment":    dbArticle.Sentiment,
+								"conversation": dbArticle.Conversation,
 							},
 						}
 						
@@ -92,6 +119,10 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 							services.SetCache(url, resultData, 1*time.Minute)
 							fmt.Printf("Retrieved from DB, transformed, and cached for URL: %s\n", url)
 						}
+						
+						// Also set the conversation data directly on the task item
+						taskItem.Conversation = trimConversationMessages(dbArticle.Conversation)
+						fmt.Printf("Retrieved conversation data for URL %s: %d entries\n", url, len(dbArticle.Conversation))
 					}
 				} else {
 					fmt.Printf("Not found in DB for URL: %s\n", url)
@@ -111,7 +142,17 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 					if sentiment, ok := processResult.Result["sentiment"].(string); ok {
 						taskItem.Sentiment = sentiment
 					}
-					fmt.Printf("Parsed ProcessResult for URL %s: summary='%s', sentiment='%s'\n", url, taskItem.Summary, taskItem.Sentiment)
+					// Extract conversation data from cache
+					if conversationData, ok := processResult.Result["conversation"]; ok {
+						if conversationBytes, err := json.Marshal(conversationData); err == nil {
+							var conversation []models.ConversationEntry
+							if err := json.Unmarshal(conversationBytes, &conversation); err == nil {
+								taskItem.Conversation = trimConversationMessages(conversation)
+								fmt.Printf("Retrieved conversation data from cache for URL %s: %d entries\n", url, len(conversation))
+							}
+						}
+					}
+					fmt.Printf("Parsed ProcessResult for URL %s: summary='%s', sentiment='%s', conversation=%d entries\n", url, taskItem.Summary, taskItem.Sentiment, len(taskItem.Conversation))
 				} else {
 					// Fallback: try to parse as flat structure (legacy or DB format)
 					if err := json.Unmarshal([]byte(resultData), &result); err == nil {
@@ -121,7 +162,17 @@ func HandleTasks(w http.ResponseWriter, r *http.Request) {
 						if sentiment, ok := result["sentiment"].(string); ok {
 							taskItem.Sentiment = sentiment
 						}
-						fmt.Printf("Parsed flat structure for URL %s: summary='%s', sentiment='%s'\n", url, taskItem.Summary, taskItem.Sentiment)
+						// Extract conversation data from flat structure
+						if conversationData, ok := result["conversation"]; ok {
+							if conversationBytes, err := json.Marshal(conversationData); err == nil {
+								var conversation []models.ConversationEntry
+								if err := json.Unmarshal(conversationBytes, &conversation); err == nil {
+									taskItem.Conversation = trimConversationMessages(conversation)
+									fmt.Printf("Retrieved conversation data from flat structure for URL %s: %d entries\n", url, len(conversation))
+								}
+							}
+						}
+						fmt.Printf("Parsed flat structure for URL %s: summary='%s', sentiment='%s', conversation=%d entries\n", url, taskItem.Summary, taskItem.Sentiment, len(taskItem.Conversation))
 					} else {
 						fmt.Printf("Failed to parse result data for URL %s: %v\n", url, err)
 					}

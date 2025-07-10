@@ -5,12 +5,68 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"backend/models"
 	"backend/services"
 )
+
+// validateURL checks if the provided string is a valid HTTPS URL
+func validateURL(urlStr string) error {
+	// Check if URL is empty
+	if strings.TrimSpace(urlStr) == "" {
+		return fmt.Errorf("URL is required")
+	}
+
+	// Parse the URL
+	parsedURL, err := url.Parse(urlStr)
+	if err != nil {
+		return fmt.Errorf("Only valid https links are allowed! please make sure you are using a public link, such as 'https://www.example.com'")
+	}
+
+	// Check if scheme is HTTPS
+	if parsedURL.Scheme != "https" {
+		return fmt.Errorf("Only valid https links are allowed! please make sure you are using a public link, such as 'https://www.example.com'")
+	}
+
+	// Check if host is not empty
+	if parsedURL.Host == "" {
+		return fmt.Errorf("Only valid https links are allowed! please make sure you are using a public link, such as 'https://www.example.com'")
+	}
+
+	return nil
+}
+
+// checkURLAccessibility makes an HTTP HEAD request to check if the URL is accessible
+func checkURLAccessibility(urlStr string) error {
+	client := &http.Client{
+		Timeout: 10 * time.Second, // 10 second timeout
+	}
+
+	req, err := http.NewRequest("HEAD", urlStr, nil)
+	if err != nil {
+		return fmt.Errorf("The provided link is invalid or cannot be loaded! please try again later or try a different link")
+	}
+
+	// Set a user agent to avoid being blocked by some servers
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("The provided link is invalid or cannot be loaded! please try again later or try a different link")
+	}
+	defer resp.Body.Close()
+
+	// Check if status code is 200 (OK)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("The provided link is invalid or cannot be loaded! please try again later or try a different link")
+	}
+
+	return nil
+}
 
 // HandleSubmit handles article submission requests
 func HandleSubmit(w http.ResponseWriter, r *http.Request) {
@@ -27,9 +83,15 @@ func HandleSubmit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if URL is empty
-	if req.URL == "" {
-		http.Error(w, "URL is required", http.StatusBadRequest)
+	// Validate URL format (HTTPS only)
+	if err := validateURL(req.URL); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// Check URL accessibility (returns 200)
+	if err := checkURLAccessibility(req.URL); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

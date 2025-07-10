@@ -43,6 +43,48 @@ namespace db_service.Migrations
 
                     b.ToTable("ArticleResults");
                 });
+
+            modelBuilder.Entity("db_service.Models.ConversationEntry", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("ArticleResultId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ArticleResultId");
+
+                    b.ToTable("ConversationEntries");
+                });
+
+            modelBuilder.Entity("db_service.Models.ConversationEntry", b =>
+                {
+                    b.HasOne("db_service.Models.ArticleResult", "ArticleResult")
+                        .WithMany("Conversation")
+                        .HasForeignKey("ArticleResultId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("ArticleResult");
+                });
+
+            modelBuilder.Entity("db_service.Models.ArticleResult", b =>
+                {
+                    b.Navigation("Conversation");
+                });
 #pragma warning restore 612, 618
         }
     }

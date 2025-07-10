@@ -40,11 +40,12 @@ type ProcessResult struct {
 }
 
 type TaskHistoryItem struct {
-	URL      string `json:"url"`
-	UUID     string `json:"uuid"`
-	Status   string `json:"status"`
-	Summary  string `json:"summary,omitempty"`
-	Sentiment string `json:"sentiment,omitempty"`
+	URL          string                `json:"url"`
+	UUID         string                `json:"uuid"`
+	Status       string                `json:"status"`
+	Summary      string                `json:"summary,omitempty"`
+	Sentiment    string                `json:"sentiment,omitempty"`
+	Conversation []ConversationEntry   `json:"conversation,omitempty"`
 }
 
 type TaskHistoryResponse struct {
@@ -54,8 +55,41 @@ type TaskHistoryResponse struct {
 // ArticleResultPayload matches the db-service model
 // Used to send the correct shape to db-service
 type ArticleResultPayload struct {
-	UUID      string `json:"uuid"`
-	URL       string `json:"url"`
-	Summary   string `json:"summary"`
-	Sentiment string `json:"sentiment"`
+	UUID         string                `json:"uuid"`
+	URL          string                `json:"url"`
+	Summary      string                `json:"summary"`
+	Sentiment    string                `json:"sentiment"`
+	Conversation []ConversationEntry   `json:"conversation"`
+}
+
+type ConversationEntry struct {
+	Role    string `json:"role"`
+	Content string `json:"content"`
+}
+
+// ConversationUpdateRequest represents a request to update conversation
+type ConversationUpdateRequest struct {
+	UUID         string              `json:"uuid"`
+	Conversation []ConversationEntry `json:"conversation"`
+}
+
+// ConversationUpdateResponse represents the response from conversation update
+type ConversationUpdateResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// ChatRequest represents a chat request from the frontend
+type ChatRequest struct {
+	UUID    string `json:"uuid"`
+	Message string `json:"message"`
+}
+
+// ChatResponse represents the response from a chat request
+type ChatResponse struct {
+	UUID     string `json:"uuid"`
+	Response string `json:"response"`
+	Success  bool   `json:"success"`
+	Error    string `json:"error,omitempty"`
 } 

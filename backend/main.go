@@ -26,6 +26,10 @@ func main() {
 	http.HandleFunc("/submit", middleware.CORS(handlers.HandleSubmit))
 	http.HandleFunc("/status/", middleware.CORS(handlers.HandleStatus))
 	http.HandleFunc("/tasks", middleware.CORS(handlers.HandleTasks))
+	http.HandleFunc("/conversation/update", middleware.CORS(handlers.HandleConversationUpdate))
+	http.HandleFunc("/chat", middleware.CORS(func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleChat(w, r, hub)
+	}))
 	http.HandleFunc("/ws", middleware.CORS(func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleWebSocket(w, r, hub)
 	}))
