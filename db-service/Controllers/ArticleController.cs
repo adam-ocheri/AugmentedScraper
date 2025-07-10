@@ -5,6 +5,7 @@ using db_service.Models;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
+using System;
 
 namespace db_service.Controllers
 {
@@ -42,11 +43,48 @@ namespace db_service.Controllers
         [HttpPost]
         public async Task<ActionResult<ArticleResult>> PostArticle([FromBody] ArticleResult article)
         {
-            _logger.LogInformation("Received POST /article request for URL: {Url}", article.Url);
-            _context.ArticleResults.Add(article);
-            await _context.SaveChangesAsync();
-            _logger.LogInformation("Article created for URL: {Url}", article.Url);
-            return CreatedAtAction(nameof(GetByUrl), new { url = article.Url }, article);
+            try
+            {
+                _logger.LogInformation("Received POST /article request");
+                
+                if (article == null)
+                {
+                    _logger.LogError("Article is null - model binding failed");
+                    return BadRequest("Article data is null or invalid format");
+                }
+                
+                _logger.LogInformation("Article data: Uuid={Uuid}, Url={Url}, Summary={Summary}, Sentiment={Sentiment}", 
+                    article.Uuid, article.Url, article.Summary, article.Sentiment);
+                
+                if (string.IsNullOrEmpty(article.Url))
+                {
+                    _logger.LogError("Article URL is null or empty");
+                    return BadRequest("Article URL is required");
+                }
+                
+                if (string.IsNullOrEmpty(article.Summary))
+                {
+                    _logger.LogError("Article Summary is null or empty");
+                    return BadRequest("Article Summary is required");
+                }
+                
+                if (string.IsNullOrEmpty(article.Sentiment))
+                {
+                    _logger.LogError("Article Sentiment is null or empty");
+                    return BadRequest("Article Sentiment is required");
+                }
+                
+                _logger.LogInformation("Received POST /article request for URL: {Url}", article.Url);
+                _context.ArticleResults.Add(article);
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Article created for URL: {Url}", article.Url);
+                return CreatedAtAction(nameof(GetByUrl), new { url = article.Url }, article);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing POST /article request");
+                return BadRequest($"Error processing request: {ex.Message}");
+            }
         }
     }
 } 

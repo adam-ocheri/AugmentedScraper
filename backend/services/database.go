@@ -28,6 +28,7 @@ func GetArticleFromDBService(url string) (string, error) {
 // SaveArticleToDBService saves article to db-service
 func SaveArticleToDBService(articleJSON string) error {
 	fmt.Printf("\nCalled saveArticleToDBService\n")
+	fmt.Printf("Request body: %s\n", articleJSON)
 
 	dbServiceURL := "http://db-service:5000/article"
 	resp, err := http.Post(dbServiceURL, "application/json", bytes.NewBuffer([]byte(articleJSON)))
@@ -42,6 +43,9 @@ func SaveArticleToDBService(articleJSON string) error {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusCreated {
 		fmt.Printf("Failed to save article: %v\n", resp.StatusCode)
+		// Read response body for more details
+		body, _ := ioutil.ReadAll(resp.Body)
+		fmt.Printf("Response body: %s\n", string(body))
 		return fmt.Errorf("failed to save article")
 	}
 	return nil

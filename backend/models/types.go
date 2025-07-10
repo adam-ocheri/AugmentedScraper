@@ -54,14 +54,14 @@ type TaskHistoryResponse struct {
 // ArticleResultPayload matches the db-service model
 // Used to send the correct shape to db-service
 type ArticleResultPayload struct {
-	UUID         string                `json:"uuid"`
-	URL          string                `json:"url"`
-	Summary      string                `json:"summary"`
-	Sentiment    string                `json:"sentiment"`
-	Conversation []ConversationEntry   `json:"conversation"`
+	UUID         string                `json:"Uuid"`
+	URL          string                `json:"Url"`
+	Summary      string                `json:"Summary"`
+	Sentiment    string                `json:"Sentiment"`
+	Conversation []ConversationEntry   `json:"Conversation"`
 }
 
 type ConversationEntry struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role    string `json:"Role"`
+	Content string `json:"Content"`
 } 

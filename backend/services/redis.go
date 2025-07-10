@@ -82,15 +82,22 @@ func StartResultSubscriber(hub *websocket.Hub) {
 		if s, ok := result.Result["sentiment"].(string); ok {
 			sentiment = s
 		}
+		
+		fmt.Printf("UUID from result: %s\n", result.UUID)
+		
 		articlePayload := models.ArticleResultPayload{
-			UUID:      result.UUID,
-			URL:       result.URL,
-			Summary:   summary,
-			Sentiment: sentiment,
+			UUID:         result.UUID,
+			URL:          result.URL,
+			Summary:      summary,
+			Sentiment:    sentiment,
+			Conversation: []models.ConversationEntry{}, // Initialize empty conversation
 		}
 		resultJSON, err := json.Marshal(articlePayload)
 		if err == nil {
+			fmt.Printf("Sending to db-service: %s\n", string(resultJSON))
 			SaveArticleToDBService(string(resultJSON))
+		} else {
+			fmt.Printf("Failed to marshal article payload: %v\n", err)
 		}
 		// 2. Save to Redis with TTL (cache the original result as before)
 		rdb.Set(ctx, "cache:"+result.URL, msg.Payload, 1*time.Minute)
