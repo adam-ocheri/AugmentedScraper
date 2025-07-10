@@ -3,6 +3,7 @@
 ## Setup
 
 To run the project, simply execute `$ docker-compose up -d`.
+Then navigate to `http://localhost:3000/` in your browser to interact with the system.
 
 Before submitting a new request, please wait until the Ollama finished downloading and loading the model (Temporary, until `Mission 9` is completed and the frontend is notified and displaying loading animation until then)
 You can use `$ docker logs llm-service -f` and see when the download and loading is finished (downloading only once then stored in persistent volume)
