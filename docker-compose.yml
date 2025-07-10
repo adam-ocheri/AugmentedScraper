@@ -42,7 +42,7 @@ services:
       - chromadb
     environment:
       - OLLAMA_HOST=http://ollama:11434
-      - OLLAMA_MODEL=llama2:13b
+      - OLLAMA_MODEL=llama3.1:8b
       - CHROMADB_HOST=http://chromadb:8000
 
   frontend:
