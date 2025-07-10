@@ -39,9 +39,11 @@ services:
     depends_on:
       - redis
       - ollama
+      - chromadb
     environment:
       - OLLAMA_HOST=http://ollama:11434
       - OLLAMA_MODEL=llama2:13b
+      - CHROMADB_HOST=http://chromadb:8000
 
   frontend:
     build: ./frontend
@@ -79,6 +81,19 @@ services:
     # volumes:
     #   - postgres_data:/var/lib/postgresql/data
 
+  chromadb:
+    image: chromadb/chroma:latest
+    container_name: chromadb
+    ports:
+      - "8000:8000"
+    volumes:
+      - chromadb_data:/chroma/chroma
+    environment:
+      - CHROMA_SERVER_HOST=0.0.0.0
+      - CHROMA_SERVER_HTTP_PORT=8000
+    restart: unless-stopped
+
 volumes:
   ollama_data:
   postgres_data:
+  chromadb_data:

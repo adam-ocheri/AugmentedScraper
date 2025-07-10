@@ -60,7 +60,12 @@
         - Add chromadb to the requirements.txt to have the package installed, and add a container in the docker-compose.yml setup with the chromadb image
         - Once a new article is processed, the article text needs to be embedded and stored in chromadb (but also think how would you relate it to to the DB/Cache data, probably every article stored in chromadb needs to have the same uuid as the Task uuid)
         - On `ModelInterface.chat` need to query the vector db and add aditional context to the user's prompt
+        - Before `ModelInterface.chat` is finished, it needs to update the conversation in the DB and Cache
     - D) Add frontend support for the conversation
+        - Update the tasks state var data structure to support a conversation array
+        - Add another div at the bottom of the `activeArticle` that has an input element (for writing the next prompt), a submit button, and above it the entire history of the conversation for this article
+        - Need to make sure that when the `activeArticle` changes, the ModelInterface.memory (in the llm-server) is being re-assigned with the newly updated current active conversation
+        - Everytime the llm-server adds a new item to the conversation, the conversation needs to be updated in the DB and the Cache
     - E) OPTIONAL - Try adding another LLM step that attempts to clean the article text from unrelated text, since we are using a dirty web scrape
         + This means to simply add another prompt process with a prompt like `model.generate_text(text, "I am sending you a text of a scraped web page article. Please identify if there are unnecessary and unrelated characters, words or sentences that does")`
 
