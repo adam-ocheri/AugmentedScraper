@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System;
+using System.Collections.Generic;
 
 namespace db_service.Controllers
 {
@@ -36,6 +37,30 @@ namespace db_service.Controllers
                 return NotFound();
             }
             _logger.LogInformation("Article found for URL: {Url}", url);
+            return article;
+        }
+
+        // GET /article/uuid/{uuid}
+        [HttpGet("uuid/{uuid}")]
+        public async Task<ActionResult<ArticleResult>> GetByUuid(string uuid)
+        {
+            _logger.LogInformation("Received GET /article/uuid request for UUID: {Uuid}", uuid);
+            
+            if (!Guid.TryParse(uuid, out Guid guidUuid))
+            {
+                _logger.LogWarning("Invalid UUID format: {Uuid}", uuid);
+                return BadRequest("Invalid UUID format");
+            }
+            
+            var article = await _context.ArticleResults
+                .Include(a => a.Conversation)
+                .FirstOrDefaultAsync(a => a.Uuid == guidUuid);
+            if (article == null)
+            {
+                _logger.LogWarning("Article not found for UUID: {Uuid}", uuid);
+                return NotFound();
+            }
+            _logger.LogInformation("Article found for UUID: {Uuid}", uuid);
             return article;
         }
 
@@ -86,5 +111,73 @@ namespace db_service.Controllers
                 return BadRequest($"Error processing request: {ex.Message}");
             }
         }
+
+        // PUT /article/conversation
+        [HttpPut("conversation")]
+        public async Task<ActionResult<ArticleResult>> UpdateConversation([FromBody] ConversationUpdateRequest request)
+        {
+            try
+            {
+                _logger.LogInformation("Received PUT /article/conversation request for UUID: {Uuid}", request.Uuid);
+                
+                if (request == null)
+                {
+                    _logger.LogError("Conversation update request is null");
+                    return BadRequest("Conversation update data is null or invalid format");
+                }
+                
+                if (string.IsNullOrEmpty(request.Uuid))
+                {
+                    _logger.LogError("Article UUID is null or empty");
+                    return BadRequest("Article UUID is required");
+                }
+                
+                if (!Guid.TryParse(request.Uuid, out Guid guidUuid))
+                {
+                    _logger.LogWarning("Invalid UUID format: {Uuid}", request.Uuid);
+                    return BadRequest("Invalid UUID format");
+                }
+                
+                var article = await _context.ArticleResults
+                    .Include(a => a.Conversation)
+                    .FirstOrDefaultAsync(a => a.Uuid == guidUuid);
+                
+                if (article == null)
+                {
+                    _logger.LogWarning("Article not found for UUID: {Uuid}", request.Uuid);
+                    return NotFound($"Article with UUID {request.Uuid} not found");
+                }
+                
+                // Clear existing conversation and add new entries
+                article.Conversation.Clear();
+                if (request.Conversation != null)
+                {
+                    foreach (var entry in request.Conversation)
+                    {
+                        article.Conversation.Add(new ConversationEntry
+                        {
+                            Role = entry.Role,
+                            Content = entry.Content,
+                            ArticleResultId = article.Uuid
+                        });
+                    }
+                }
+                
+                await _context.SaveChangesAsync();
+                _logger.LogInformation("Conversation updated for article UUID: {Uuid}", request.Uuid);
+                return Ok(article);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing PUT /article/conversation request");
+                return BadRequest($"Error processing request: {ex.Message}");
+            }
+        }
+    }
+
+    public class ConversationUpdateRequest
+    {
+        public string Uuid { get; set; }
+        public List<ConversationEntry> Conversation { get; set; }
     }
 } 

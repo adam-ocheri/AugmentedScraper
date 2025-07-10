@@ -15,6 +15,7 @@ interface TaskResult {
   sentiment?: string;
   status: string;
   uuid?: string;
+  conversation?: ConversationEntry[];
 }
 
 interface TaskHistoryItem {
@@ -23,6 +24,12 @@ interface TaskHistoryItem {
   status: string;
   summary?: string;
   sentiment?: string;
+  conversation?: ConversationEntry[];
+}
+
+interface ConversationEntry {
+  role: string;
+  content: string;
 }
 
 export default function Home() {
@@ -33,6 +40,11 @@ export default function Home() {
   const [tasks, setTasks] = useState<TaskResult[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  
+  // Conversation state
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatLoading, setChatLoading] = useState(false);
+  const [conversation, setConversation] = useState<ConversationEntry[]>([]);
 
   const handleSubmit = async () => {
     if (!url.trim()) {
@@ -84,6 +96,43 @@ export default function Home() {
     }
   };
 
+  const handleChatSubmit = async () => {
+    if (!chatMessage.trim() || !activeArticle?.uuid) {
+      return;
+    }
+
+    setChatLoading(true);
+    
+    try {
+      // Add user message to conversation immediately
+      const userMessage: ConversationEntry = {
+        role: "user",
+        content: chatMessage
+      };
+      
+      setConversation(prev => [...prev, userMessage]);
+      
+      // Send chat request - don't add AI response here, let WebSocket handle it
+      await axios.post(`${API_URL}/chat`, {
+        uuid: activeArticle.uuid,
+        message: chatMessage
+      });
+
+      console.log("Chat request sent, waiting for WebSocket response");
+      
+      // Clear input
+      setChatMessage("");
+      
+    } catch (err) {
+      console.error("Chat error:", err);
+      // Remove the user message if there was an error
+      setConversation(prev => prev.slice(0, -1));
+      alert("Failed to send message. Please try again.");
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const fetchTaskHistory = async () => {
     try {
       setLoadingHistory(true);
@@ -96,7 +145,8 @@ export default function Home() {
           uuid: task.uuid,
           status: task.status,
           summary: task.summary || "",
-          sentiment: task.sentiment || ""
+          sentiment: task.sentiment || "",
+          conversation: task.conversation || []
         }));
         
         setTasks(taskHistory);
@@ -111,7 +161,11 @@ export default function Home() {
   };
 
   const handleArticleSelect = (article: TaskResult) => {
+    console.log("Article selected:", article);
+    console.log("Article status:", article.status);
     setActiveArticle(article);
+    // Load conversation for the selected article
+    setConversation(article.conversation || []);
   };
 
   useEffect(() => {
@@ -170,6 +224,28 @@ export default function Home() {
             console.log("payload.uuid:", payload.uuid);
           }
         }
+        
+        // Handle chat response messages
+        if (data.type === "chat_response") {
+          const payload = data.payload;
+          console.log("Chat response received:", payload);
+          
+          // Update conversation if it matches the active article
+          if (activeArticle?.uuid === payload.uuid) {
+            const assistantMessage: ConversationEntry = {
+              role: "assistant",
+              content: payload.response
+            };
+            
+            setConversation(prev => {
+              // Add the assistant message - WebSocket is the single source of truth
+              return [...prev, assistantMessage];
+            });
+            
+            // Stop showing loading state
+            setChatLoading(false);
+          }
+        }
       } catch (err) {
         console.error("Error parsing WebSocket message:", err);
       }
@@ -191,8 +267,10 @@ export default function Home() {
   const getStatusColor = (status: string) => {
     switch (status) {
       case "SUCCESS":
+      case "done":
         return "bg-green-100 text-green-800";
       case "FAILED":
+      case "failed":
         return "bg-red-100 text-red-800";
       default:
         return "bg-yellow-100 text-yellow-800";
@@ -262,6 +340,11 @@ export default function Home() {
                           {task.summary.substring(0, 100)}...
                         </p>
                       )}
+                      {task.conversation && task.conversation.length > 0 && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          {task.conversation.length} message{task.conversation.length !== 1 ? 's' : ''} in conversation
+                        </p>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -321,36 +404,118 @@ export default function Home() {
 
             {/* Active Article Details */}
             {activeArticle ? (
-              <div className="bg-white rounded-lg shadow-md p-6">
-                <h2 className="text-xl font-semibold mb-4">Article Details</h2>
-                <div className="space-y-3">
-                  <div>
-                    <span className="font-medium text-gray-700">URL:</span>
-                    <a href={activeArticle.url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:underline">
-                      {activeArticle.url}
-                    </a>
-                  </div>
-                  <div>
-                    <span className="font-medium text-gray-700">Status:</span>
-                    <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(activeArticle.status)}`}>
-                      {activeArticle.status}
-                    </span>
-                  </div>
-                  {activeArticle.summary && activeArticle.summary.trim() && (
+              <div className="space-y-6">
+                {/* Article Information */}
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h2 className="text-xl font-semibold mb-4">Article Details</h2>
+                  <div className="space-y-3">
                     <div>
-                      <span className="font-medium text-gray-700">Summary:</span>
-                      <div className="mt-2 prose prose-sm max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeArticle.summary}</ReactMarkdown>
+                      <span className="font-medium text-gray-700">URL:</span>
+                      <a href={activeArticle.url} target="_blank" rel="noopener noreferrer" className="ml-2 text-blue-600 hover:underline">
+                        {activeArticle.url}
+                      </a>
+                    </div>
+                    <div>
+                      <span className="font-medium text-gray-700">Status:</span>
+                      <span className={`ml-2 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(activeArticle.status)}`}>
+                        {activeArticle.status}
+                      </span>
+                    </div>
+                    {activeArticle.summary && activeArticle.summary.trim() && (
+                      <div>
+                        <span className="font-medium text-gray-700">Summary:</span>
+                        <div className="mt-2 prose prose-sm max-w-none">
+                          <ReactMarkdown remarkPlugins={[remarkGfm]}>{activeArticle.summary}</ReactMarkdown>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {activeArticle.sentiment && (
-                    <div>
-                      <span className="font-medium text-gray-700">Sentiment:</span>
-                      <p className="mt-1 text-gray-600">{activeArticle.sentiment}</p>
-                    </div>
-                  )}
+                    )}
+                    {activeArticle.sentiment && (
+                      <div>
+                        <span className="font-medium text-gray-700">Sentiment:</span>
+                        <p className="mt-1 text-gray-600">{activeArticle.sentiment}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Conversation Section */}
+                {(activeArticle.status === "SUCCESS" || activeArticle.status === "done") && (
+                  <div className="bg-white rounded-lg shadow-md p-6">
+                    <h3 className="text-lg font-semibold mb-4">Chat with AI about this article</h3>
+                    
+                    {/* Conversation History */}
+                    <div className="mb-4 max-h-96 overflow-y-auto border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      {conversation.length > 0 ? (
+                        <div className="space-y-4">
+                          {conversation.map((message, index) => (
+                            <div
+                              key={index}
+                              className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                            >
+                              <div
+                                className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+                                  message.role === 'user'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-white text-gray-800 border border-gray-200'
+                                }`}
+                              >
+                                <div className="text-sm font-medium mb-1">
+                                  {message.role === 'user' ? 'You' : 'AI Assistant'}
+                                </div>
+                                <div className="text-sm whitespace-pre-wrap">
+                                  {message.content}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                          {chatLoading && (
+                            <div className="flex justify-start">
+                              <div className="bg-white text-gray-800 border border-gray-200 px-4 py-2 rounded-lg">
+                                <div className="text-sm font-medium mb-1">AI Assistant</div>
+                                <div className="text-sm text-gray-500">Typing...</div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center text-gray-500 py-8">
+                          <svg className="w-12 h-12 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                          </svg>
+                          <p>Start a conversation about this article!</p>
+                          <p className="text-sm">Ask questions about the content, summary, or sentiment.</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Chat Input */}
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={chatMessage}
+                        onChange={(e) => setChatMessage(e.target.value)}
+                        onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
+                        placeholder="Ask a question about this article..."
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        disabled={chatLoading}
+                      />
+                      <button
+                        onClick={handleChatSubmit}
+                        disabled={chatLoading || !chatMessage.trim()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {chatLoading ? (
+                          <div className="flex items-center">
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                            Sending
+                          </div>
+                        ) : (
+                          "Send"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="bg-white rounded-lg shadow-md p-6 text-center">

@@ -153,4 +153,83 @@ func GetAllURLTaskKeys() ([]string, error) {
 // GetContext returns the Redis context
 func GetContext() context.Context {
 	return ctx
+}
+
+// UpdateConversationInCache updates the conversation for an article in the cache
+func UpdateConversationInCache(uuid string, conversation []models.ConversationEntry) error {
+	// First, we need to find the URL for this UUID by checking all cached items
+	// This is a bit inefficient but necessary since we cache by URL, not UUID
+	cacheKeys, err := rdb.Keys(ctx, "cache:*").Result()
+	if err != nil {
+		return fmt.Errorf("failed to get cache keys: %v", err)
+	}
+	
+	for _, cacheKey := range cacheKeys {
+		cachedData, err := rdb.Get(ctx, cacheKey).Result()
+		if err != nil {
+			continue
+		}
+		
+		// Try to parse the cached data to check if it matches our UUID
+		var result models.ProcessResult
+		if err := json.Unmarshal([]byte(cachedData), &result); err != nil {
+			continue
+		}
+		
+		if result.UUID == uuid {
+			// Found the matching cached item, update the conversation
+			if result.Result == nil {
+				result.Result = make(map[string]interface{})
+			}
+			result.Result["conversation"] = conversation
+			
+			// Marshal the updated result
+			updatedData, err := json.Marshal(result)
+			if err != nil {
+				return fmt.Errorf("failed to marshal updated result: %v", err)
+			}
+			
+			// Update the cache with the new data (preserve TTL)
+			ttl, err := rdb.TTL(ctx, cacheKey).Result()
+			if err != nil {
+				ttl = 1 * time.Minute // Default TTL if we can't get it
+			}
+			
+			err = rdb.Set(ctx, cacheKey, updatedData, ttl).Err()
+			if err != nil {
+				return fmt.Errorf("failed to update cache: %v", err)
+			}
+			
+			fmt.Printf("Updated conversation in cache for UUID: %s, URL: %s\n", uuid, result.URL)
+			return nil
+		}
+	}
+	
+	return fmt.Errorf("no cached article found for UUID: %s", uuid)
+}
+
+// GetArticleByUUIDFromCache retrieves an article from cache by UUID
+func GetArticleByUUIDFromCache(uuid string) (*models.ProcessResult, error) {
+	cacheKeys, err := rdb.Keys(ctx, "cache:*").Result()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get cache keys: %v", err)
+	}
+	
+	for _, cacheKey := range cacheKeys {
+		cachedData, err := rdb.Get(ctx, cacheKey).Result()
+		if err != nil {
+			continue
+		}
+		
+		var result models.ProcessResult
+		if err := json.Unmarshal([]byte(cachedData), &result); err != nil {
+			continue
+		}
+		
+		if result.UUID == uuid {
+			return &result, nil
+		}
+	}
+	
+	return nil, fmt.Errorf("no cached article found for UUID: %s", uuid)
 } 

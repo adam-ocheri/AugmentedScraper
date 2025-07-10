@@ -60,13 +60,16 @@
         - Add chromadb to the requirements.txt to have the package installed, and add a container in the docker-compose.yml setup with the chromadb image
         - Once a new article is processed, the article text needs to be embedded and stored in chromadb (but also think how would you relate it to to the DB/Cache data, probably every article stored in chromadb needs to have the same uuid as the Task uuid)
         - On `ModelInterface.chat` need to query the vector db and add aditional context to the user's prompt
-        - Before `ModelInterface.chat` is finished, it needs to update the conversation in the DB and Cache
-    - D) Add frontend support for the conversation
+    - D) Before `ModelInterface.chat()` is finished, it needs to update the conversation in the DB and Cache
+        - This probably means creating a new handler in the backend, `handleConversationUpdate` OR alternatively, think of how we can broadcast this via pubsub (unless potentially large message history may be heavy on pubsub)
+        - Update the Conversation in the db-service (this probably means adding another route in the ArticlesController and some DTO class to make the data transfer)
+        - Check if related article is currently cached, and if so, update the conversation in the cache as well (if not cached, would probably need to add to cache with the updated conversation data)
+    - E) Add frontend support for the conversation
         - Update the tasks state var data structure to support a conversation array
         - Add another div at the bottom of the `activeArticle` that has an input element (for writing the next prompt), a submit button, and above it the entire history of the conversation for this article
         - Need to make sure that when the `activeArticle` changes, the ModelInterface.memory (in the llm-server) is being re-assigned with the newly updated current active conversation
         - Everytime the llm-server adds a new item to the conversation, the conversation needs to be updated in the DB and the Cache
-    - E) OPTIONAL - Try adding another LLM step that attempts to clean the article text from unrelated text, since we are using a dirty web scrape
+    - F) OPTIONAL - Try adding another LLM step that attempts to clean the article text from unrelated text, since we are using a dirty web scrape
         + This means to simply add another prompt process with a prompt like `model.generate_text(text, "I am sending you a text of a scraped web page article. Please identify if there are unnecessary and unrelated characters, words or sentences that does")`
 
 # MISSION 12 | Status: Pending | Details: Potential issue with concurrent requests - the python subscriber worker can potentially become stuck when trying to process multiple requests number exceeding the "OLLAMA_MAX_THREADS" or whatever that env var's name is. So there should probably be a refactor moving that bit of code to run on a background thread, clearing the pubsub loop to be able to process newly incoming events without a huckle.
@@ -78,5 +81,3 @@
     - A) This means creating websocket/pubsub callbacks for each of these steps
     - B) These callbacks would need to be triggered by the llm-server, pushing messages to the backend server
     - C) The backend server then forwards these messages to the front
-
-# MISSION 14 | Status: Pending | Details: Frontend should also be able to return cache hit! Right now it waits only for the websocket to return the data || or maybe it should return a message saying 'already exists' to not over-complicate things

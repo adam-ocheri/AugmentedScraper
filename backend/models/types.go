@@ -64,4 +64,31 @@ type ArticleResultPayload struct {
 type ConversationEntry struct {
 	Role    string `json:"Role"`
 	Content string `json:"Content"`
+}
+
+// ConversationUpdateRequest represents a request to update conversation
+type ConversationUpdateRequest struct {
+	UUID         string              `json:"Uuid"`
+	Conversation []ConversationEntry `json:"Conversation"`
+}
+
+// ConversationUpdateResponse represents the response from conversation update
+type ConversationUpdateResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	Error   string `json:"error,omitempty"`
+}
+
+// ChatRequest represents a chat request from the frontend
+type ChatRequest struct {
+	UUID    string `json:"uuid"`
+	Message string `json:"message"`
+}
+
+// ChatResponse represents the response from a chat request
+type ChatResponse struct {
+	UUID     string `json:"uuid"`
+	Response string `json:"response"`
+	Success  bool   `json:"success"`
+	Error    string `json:"error,omitempty"`
 } 

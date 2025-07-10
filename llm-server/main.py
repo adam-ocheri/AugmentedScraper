@@ -96,7 +96,8 @@ class ModelInterface:
         """Embed article text and store in ChromaDB with UUID metadata"""
         try:
             # Chunk the text to fit within token limits
-            logging.error(f"\n\n SANITY CHECK: Embedding text for UUID: {uuid}")
+            logging.info(f"Embedding text for UUID: {uuid}")
+            logging.info(f"Text length: {len(text)} characters")
             chunks = chunk_text(text, max_chunk_size=1500)
             logging.info(f"Split text into {len(chunks)} chunks for UUID: {uuid}")
 
@@ -108,15 +109,25 @@ class ModelInterface:
             for i, chunk in enumerate(chunks):
                 try:
                     logging.info(
-                        f"Embedding chunk {i} of UUID: {uuid} | Chunk: \n {chunk}"
+                        f"Embedding chunk {i+1}/{len(chunks)} of UUID: {uuid} | Chunk length: {len(chunk)}"
                     )
                     response = self.client.embed(
                         model=EMBEDDING_MODEL_NAME, input=chunk
                     )
-                    logging.error(
-                        f"!!! Embedding response: {response}"
-                    )  # change back to info
+                    logging.info(
+                        f"Generated embedding for chunk {i+1}, embedding length: {len(response['embeddings'])}"
+                    )
+
+                    # Fix the embedding format - flatten nested lists if needed
                     embeddings = response["embeddings"]
+                    if isinstance(embeddings, list) and len(embeddings) > 0:
+                        # If it's a nested list like [[[embeddings]]], flatten it
+                        while isinstance(embeddings[0], list):
+                            embeddings = embeddings[0]
+
+                    logging.info(
+                        f"Flattened embedding length for chunk {i+1}: {len(embeddings)}"
+                    )
 
                     # Store chunk with metadata
                     chunk_id = f"{uuid}_chunk_{i}"
@@ -140,15 +151,29 @@ class ModelInterface:
 
             # Store all chunks in ChromaDB
             if all_embeddings:
+                logging.info(
+                    f"Storing {len(all_documents)} chunks in ChromaDB for UUID: {uuid}"
+                )
                 collection.add(
                     ids=all_ids,
                     embeddings=all_embeddings,
                     documents=all_documents,
                     metadatas=all_metadatas,
                 )
-                logging.error(  # change back to info
-                    f"Stored {len(all_documents)} chunks in ChromaDB for UUID: {uuid}"
+                logging.info(
+                    f"Successfully stored {len(all_documents)} chunks in ChromaDB for UUID: {uuid}"
                 )
+
+                # Verify the data was stored
+                try:
+                    count = collection.count(where={"uuid": str(uuid)})
+                    logging.info(
+                        f"Verified {count} chunks stored in ChromaDB for UUID: {uuid}"
+                    )
+                except Exception as e:
+                    logging.error(
+                        f"Error verifying ChromaDB storage for UUID {uuid}: {e}"
+                    )
             else:
                 logging.error(f"No embeddings generated for any chunks of UUID: {uuid}")
 
@@ -158,14 +183,30 @@ class ModelInterface:
     def retrieve_text(self, uuid, prompt):
         """Retrieve relevant context from ChromaDB based on the prompt"""
         try:
+            logging.info(f"Retrieving context for UUID: {uuid} with prompt: {prompt}")
+
             response = self.client.embed(model=EMBEDDING_MODEL_NAME, input=prompt)
+            logging.info(
+                f"Generated embedding for prompt, embedding length: {len(response['embeddings'])}"
+            )
+
+            # Fix the embedding format - flatten nested lists if needed
+            embeddings = response["embeddings"]
+            if isinstance(embeddings, list) and len(embeddings) > 0:
+                # If it's a nested list like [[[embeddings]]], flatten it
+                while isinstance(embeddings[0], list):
+                    embeddings = embeddings[0]
+
+            logging.info(f"Flattened embeddings length: {len(embeddings)}")
 
             # query the collection for all chunks of the specific article
             results = collection.query(
-                query_embeddings=[response["embeddings"]],
+                query_embeddings=[embeddings],
                 n_results=3,  # Get top 3 most relevant chunks
                 where={"uuid": str(uuid)},
             )
+
+            logging.info(f"ChromaDB query results: {results}")
 
             if results["documents"] and len(results["documents"][0]) > 0:
                 # Combine the most relevant chunks
@@ -174,12 +215,15 @@ class ModelInterface:
                 logging.info(
                     f"Retrieved {len(relevant_chunks)} chunks for UUID: {uuid}"
                 )
+                logging.info(f"Combined context: {combined_context[:200]}...")
                 return combined_context
             else:
                 logging.warning(f"No context found for UUID: {uuid}")
+                logging.warning(f"ChromaDB results: {results}")
                 return ""
         except Exception as e:
             logging.error(f"Error retrieving text from ChromaDB: {e}")
+            logging.error(f"Exception details: {str(e)}")
             return ""
 
     def chat(self, text, uuid=None) -> str:
@@ -220,10 +264,79 @@ class ModelInterface:
 
         logging.info(f"LLM chat response: {generated_answer}")
 
-        # TODO: Update the conversation array in the Postgres DB and cache here
-        # This will be implemented when we add the conversation endpoints
+        # Update the conversation array in the Postgres DB and cache
+        if uuid:
+            self.update_conversation_in_backend(uuid)
 
         return generated_answer
+
+    def update_conversation_in_backend(self, uuid: str):
+        """Update the conversation in the backend database and cache"""
+        try:
+            # Convert memory to the format expected by the backend
+            conversation_entries = []
+            for message in self.memory:
+                if message["role"] != "system":  # Skip system messages
+                    conversation_entries.append(
+                        {"Role": message["role"], "Content": message["content"]}
+                    )
+
+            # Prepare the request payload
+            payload = {"Uuid": uuid, "Conversation": conversation_entries}
+
+            # Send request to backend
+            backend_url = "http://backend:8080/conversation/update"
+            response = requests.post(
+                backend_url,
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=10,
+            )
+
+            if response.status_code == 200:
+                logging.info(f"Successfully updated conversation for UUID: {uuid}")
+            else:
+                logging.error(
+                    f"Failed to update conversation for UUID: {uuid}. Status: {response.status_code}, Response: {response.text}"
+                )
+
+        except Exception as e:
+            logging.error(f"Error updating conversation for UUID {uuid}: {e}")
+
+    def load_conversation_from_backend(self, uuid: str) -> bool:
+        """Load existing conversation from backend for the given UUID"""
+        try:
+            # Try to get existing conversation from backend
+            backend_url = f"http://backend:8080/tasks"
+            response = requests.get(backend_url, timeout=5)
+
+            if response.status_code == 200:
+                tasks_data = response.json()
+                # Find the task with matching UUID
+                for task in tasks_data.get("tasks", []):
+                    if task.get("uuid") == uuid:
+                        # Load existing conversation if available
+                        if "conversation" in task and task["conversation"]:
+                            self.reset_memory()  # Clear current memory
+                            # Add existing conversation to memory
+                            for entry in task["conversation"]:
+                                self.memory.append(
+                                    {
+                                        "role": entry.get("role", "user"),
+                                        "content": entry.get("content", ""),
+                                    }
+                                )
+                            logging.info(
+                                f"Loaded existing conversation for UUID: {uuid}"
+                            )
+                            return True
+                        break
+            return False
+        except Exception as e:
+            logging.warning(
+                f"Could not load existing conversation for UUID {uuid}: {e}"
+            )
+            return False
 
     def reset_memory(self):
         """Reset the conversation memory for a new article"""
@@ -475,6 +588,35 @@ def get_stats():
         return {"error": str(e)}
 
 
+@app.get("/debug/chromadb")
+def debug_chromadb():
+    """Debug endpoint to check ChromaDB status"""
+    try:
+        # Get collection info
+        collection_info = {
+            "name": collection.name,
+            "count": collection.count(),
+            "metadata": collection.metadata,
+        }
+
+        # Test embedding generation
+        test_text = "This is a test embedding"
+        test_response = LLM.client.embed(model=EMBEDDING_MODEL_NAME, input=test_text)
+
+        return {
+            "collection_info": collection_info,
+            "embedding_test": {
+                "model": EMBEDDING_MODEL_NAME,
+                "test_text": test_text,
+                "embedding_length": len(test_response["embeddings"]),
+                "success": True,
+            },
+        }
+    except Exception as e:
+        logging.error(f"Error in ChromaDB debug: {e}")
+        return {"error": str(e)}
+
+
 @app.post("/chat")
 def chat_endpoint(request: dict):
     """Handle chat conversations with article context"""
@@ -485,9 +627,10 @@ def chat_endpoint(request: dict):
         if not uuid or not message:
             return {"error": "Missing uuid or message"}
 
-        # Reset memory for new conversation if needed
-        # This could be enhanced to load existing conversation from cache/DB
-        LLM.reset_memory()
+        # Load existing conversation from backend if available
+        if not LLM.load_conversation_from_backend(uuid):
+            # If we can't load existing conversation, start fresh
+            LLM.reset_memory()
 
         # Generate response with context
         response = LLM.chat(message, uuid)
