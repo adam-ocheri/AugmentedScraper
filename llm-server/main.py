@@ -8,12 +8,10 @@ from fastapi import FastAPI
 import uvicorn
 from contextlib import asynccontextmanager
 import requests
-from urllib.parse import urlparse
-from bs4 import BeautifulSoup
 from ollama import Client
 import chromadb
 import os
-import re
+from utils import chunk_text, scrape_url
 
 EMBEDDING_MODEL_NAME = "nomic-embed-text:latest"
 
@@ -29,32 +27,6 @@ except Exception as e:
     # Collection might already exist
     collection = chroma_db_client.get_collection(name="articles")
     logging.info("Using existing ChromaDB collection: articles")
-
-
-def chunk_text(text, max_chunk_size=1500):
-    """Split text into chunks that fit within the token limit"""
-    # Simple word-based chunking (rough approximation of tokens)
-    words = text.split()
-    chunks = []
-    current_chunk = []
-    current_size = 0
-
-    for word in words:
-        # Rough estimate: 1 word ≈ 1.3 tokens
-        word_size = len(word.split()) * 1.3
-
-        if current_size + word_size > max_chunk_size and current_chunk:
-            chunks.append(" ".join(current_chunk))
-            current_chunk = [word]
-            current_size = word_size
-        else:
-            current_chunk.append(word)
-            current_size += word_size
-
-    if current_chunk:
-        chunks.append(" ".join(current_chunk))
-
-    return chunks
 
 
 class ModelInterface:
@@ -499,6 +471,7 @@ class ModelInterface:
             }
 
 
+# LLM interface singleton
 LLM = ModelInterface("llama3.1:8b")
 
 # Configure logging to output to stdout
@@ -524,77 +497,6 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
-
-def is_valid_url(url: str) -> bool:
-    """Check if the given string is a valid URL"""
-    try:
-        result = urlparse(url)
-        return all([result.scheme, result.netloc])
-    except:
-        return False
-
-
-def scrape_url(url: str) -> str:
-    """Scrape the text contents of the webpage at the given url"""
-    if not is_valid_url(url):
-        raise ValueError("Invalid URL")
-
-    response = requests.get(url)
-    if response.status_code != 200:
-        raise ValueError("Failed to fetch the URL")
-
-    soup = BeautifulSoup(response.text, "html.parser")
-    text = soup.get_text()
-    logging.info(f"Scraped text: {text}")
-
-    return text
-
-
-# TODO: Refactor this to run on a background thread
-def process_article(url: str, url_task_data: str, url_task_key: str, task_uuid: str):
-    text = scrape_url(url)
-    result = LLM.process_article(text, task_uuid)
-
-    # Generate result (this is where you'd integrate with your actual LLM)
-    result = {
-        "url": url,
-        "summary": result["summary"],
-        "sentiment": result["sentiment"],
-        "conversation": [],  # Initialize empty conversation array
-        # "result": result,
-        # "key_points": [
-        #     f"Key point 1 about {url}",
-        #     f"Key point 2 about {url}",
-        #     f"Key point 3 about {url}",
-        # ],
-        "processed_at": time.time(),
-    }
-
-    # Convert result to JSON string for caching
-    result_json = json.dumps(result)
-
-    # MISSION 1.C: Cache the result
-    cache_key = f"cache:{url}"
-    r.set(cache_key, result_json)
-    logging.info(f"Cached result for URL: {url}")
-
-    # Update task status to "done"
-    r.set(f"status:{task_uuid}", "done")
-
-    # Update URL task mapping to "done"
-    if url_task_data:
-        url_task = json.loads(url_task_data)
-        url_task["status"] = "done"
-        r.set(url_task_key, json.dumps(url_task))
-
-    # Publish result to results channel (for real-time updates if needed)
-    r.publish(
-        "process:results",
-        json.dumps({"uuid": task_uuid, "url": url, "result": result}),
-    )
-
-    logging.info(f"Completed task {task_uuid} for URL: {url}")
 
 
 def redis_worker():
@@ -632,12 +534,6 @@ def redis_worker():
                     "summary": result["summary"],
                     "sentiment": result["sentiment"],
                     "conversation": [],  # Initialize empty conversation array
-                    # "result": result,
-                    # "key_points": [
-                    #     f"Key point 1 about {url}",
-                    #     f"Key point 2 about {url}",
-                    #     f"Key point 3 about {url}",
-                    # ],
                     "processed_at": time.time(),
                 }
 
@@ -685,105 +581,6 @@ def redis_worker():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "llm-server"}
-
-
-@app.get("/stats")
-def get_stats():
-    """Get current statistics about tasks and queue"""
-    try:
-        queue_length = r.llen("queue:tasks")
-
-        # Count tasks by status
-        pending_count = 0
-        processing_count = 0
-        done_count = 0
-        failed_count = 0
-
-        # Get all status keys
-        status_keys = r.keys("status:*")
-        for key in status_keys:
-            status = r.get(key)
-            if status == "pending":
-                pending_count += 1
-            elif status == "processing":
-                processing_count += 1
-            elif status == "done":
-                done_count += 1
-            elif status == "failed":
-                failed_count += 1
-
-        return {
-            "queue_length": queue_length,
-            "tasks_pending": pending_count,
-            "tasks_processing": processing_count,
-            "tasks_done": done_count,
-            "tasks_failed": failed_count,
-        }
-    except Exception as e:
-        logging.error(f"Error getting stats: {e}")
-        return {"error": str(e)}
-
-
-@app.get("/debug/chromadb")
-def debug_chromadb():
-    """Debug endpoint to check ChromaDB status"""
-    try:
-        # Get collection info
-        collection_info = {
-            "name": collection.name,
-            "count": collection.count(),
-            "metadata": collection.metadata,
-        }
-
-        # Test embedding generation
-        test_text = "This is a test embedding"
-        test_response = LLM.client.embed(model=EMBEDDING_MODEL_NAME, input=test_text)
-
-        return {
-            "collection_info": collection_info,
-            "embedding_test": {
-                "model": EMBEDDING_MODEL_NAME,
-                "test_text": test_text,
-                "embedding_length": len(test_response["embeddings"]),
-                "success": True,
-            },
-        }
-    except Exception as e:
-        logging.error(f"Error in ChromaDB debug: {e}")
-        return {"error": str(e)}
-
-
-@app.post("/debug/test-embedding")
-def test_embedding(request: dict):
-    """Test endpoint to debug embedding and storage issues"""
-    try:
-        test_uuid = request.get("uuid", "test-uuid-123")
-        test_text = request.get(
-            "text", "This is a test article for debugging ChromaDB issues."
-        )
-
-        logging.info(f"Testing embedding for UUID: {test_uuid}")
-
-        # Test the embedding process
-        LLM.embed_text(test_text, test_uuid)
-
-        # Test retrieval
-        test_prompt = "What is this article about?"
-        context = LLM.retrieve_text(test_uuid, test_prompt)
-
-        return {
-            "success": True,
-            "uuid": test_uuid,
-            "text_length": len(test_text),
-            "context_retrieved": len(context) > 0,
-            "context_length": len(context),
-            "context_preview": context[:200] if context else "",
-        }
-    except Exception as e:
-        logging.error(f"Error in test embedding: {e}")
-        import traceback
-
-        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 @app.post("/chat")

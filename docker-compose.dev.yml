@@ -1,3 +1,6 @@
+# TODO: research  how to make proper hot-reload setup
+#! this docker-compose setup is not functional at the moment
+
 services:
   redis:
     image: redis:7
