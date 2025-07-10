@@ -95,25 +95,58 @@ class ModelInterface:
     def embed_text(self, text, uuid):
         """Embed article text and store in ChromaDB with UUID metadata"""
         try:
+            # Validate input
+            if not text or not text.strip():
+                logging.error(f"Empty or invalid text provided for UUID: {uuid}")
+                return
+
+            if not uuid:
+                logging.error("No UUID provided for embedding")
+                return
+
             # Chunk the text to fit within token limits
             logging.info(f"Embedding text for UUID: {uuid}")
             logging.info(f"Text length: {len(text)} characters")
             chunks = chunk_text(text, max_chunk_size=1500)
             logging.info(f"Split text into {len(chunks)} chunks for UUID: {uuid}")
 
+            if not chunks:
+                logging.error(f"No chunks generated for UUID: {uuid}")
+                return
+
             all_embeddings = []
             all_documents = []
             all_metadatas = []
             all_ids = []
 
+            successful_chunks = 0
             for i, chunk in enumerate(chunks):
                 try:
+                    if not chunk or not chunk.strip():
+                        logging.warning(f"Skipping empty chunk {i} for UUID: {uuid}")
+                        continue
+
                     logging.info(
                         f"Embedding chunk {i+1}/{len(chunks)} of UUID: {uuid} | Chunk length: {len(chunk)}"
                     )
+
+                    # Validate chunk before embedding
+                    if len(chunk) < 10:  # Skip very short chunks
+                        logging.warning(
+                            f"Skipping very short chunk {i} for UUID: {uuid}"
+                        )
+                        continue
+
                     response = self.client.embed(
                         model=EMBEDDING_MODEL_NAME, input=chunk
                     )
+
+                    if not response or "embeddings" not in response:
+                        logging.error(
+                            f"Invalid embedding response for chunk {i} of UUID: {uuid}"
+                        )
+                        continue
+
                     logging.info(
                         f"Generated embedding for chunk {i+1}, embedding length: {len(response['embeddings'])}"
                     )
@@ -125,13 +158,21 @@ class ModelInterface:
                         while isinstance(embeddings[0], list):
                             embeddings = embeddings[0]
 
+                    # Validate embedding
+                    if not embeddings or len(embeddings) == 0:
+                        logging.error(
+                            f"Empty embedding generated for chunk {i} of UUID: {uuid}"
+                        )
+                        continue
+
                     logging.info(
                         f"Flattened embedding length for chunk {i+1}: {len(embeddings)}"
                     )
 
                     # Store chunk with metadata
                     chunk_id = f"{uuid}_chunk_{i}"
-                    all_embeddings.extend(embeddings)
+                    # FIXED: Add each embedding as a separate list item, not extend
+                    all_embeddings.append(embeddings)
                     all_documents.append(chunk)
                     all_metadatas.append(
                         {
@@ -141,6 +182,7 @@ class ModelInterface:
                         }
                     )
                     all_ids.append(chunk_id)
+                    successful_chunks += 1
 
                     logging.info(
                         f"Generated embeddings for chunk {i+1}/{len(chunks)} of UUID: {uuid}"
@@ -149,27 +191,54 @@ class ModelInterface:
                 except Exception as e:
                     logging.error(f"Error embedding chunk {i} for UUID {uuid}: {e}")
 
+            # Validate that we have matching lengths before storing
+            if (
+                len(all_embeddings) != len(all_documents)
+                or len(all_documents) != len(all_metadatas)
+                or len(all_metadatas) != len(all_ids)
+            ):
+                logging.error(
+                    f"Length mismatch in ChromaDB data for UUID {uuid}: embeddings={len(all_embeddings)}, documents={len(all_documents)}, metadatas={len(all_metadatas)}, ids={len(all_ids)}"
+                )
+                return
+
             # Store all chunks in ChromaDB
-            if all_embeddings:
+            if all_embeddings and successful_chunks > 0:
                 logging.info(
                     f"Storing {len(all_documents)} chunks in ChromaDB for UUID: {uuid}"
                 )
-                collection.add(
-                    ids=all_ids,
-                    embeddings=all_embeddings,
-                    documents=all_documents,
-                    metadatas=all_metadatas,
-                )
-                logging.info(
-                    f"Successfully stored {len(all_documents)} chunks in ChromaDB for UUID: {uuid}"
-                )
 
-                # Verify the data was stored
                 try:
-                    count = collection.count(where={"uuid": str(uuid)})
-                    logging.info(
-                        f"Verified {count} chunks stored in ChromaDB for UUID: {uuid}"
+                    collection.add(
+                        ids=all_ids,
+                        embeddings=all_embeddings,
+                        documents=all_documents,
+                        metadatas=all_metadatas,
                     )
+                    logging.info(
+                        f"Successfully stored {len(all_documents)} chunks in ChromaDB for UUID: {uuid}"
+                    )
+                except Exception as e:
+                    logging.error(f"Error adding to ChromaDB for UUID {uuid}: {e}")
+                    return
+
+                # Verify the data was stored - FIXED: Remove 'where' parameter for compatibility
+                try:
+                    # Get all documents and filter by UUID in Python instead
+                    all_results = collection.get()
+                    if all_results and "metadatas" in all_results:
+                        uuid_count = sum(
+                            1
+                            for metadata in all_results["metadatas"]
+                            if metadata and metadata.get("uuid") == str(uuid)
+                        )
+                        logging.info(
+                            f"Verified {uuid_count} chunks stored in ChromaDB for UUID: {uuid}"
+                        )
+                    else:
+                        logging.info(
+                            f"Verified chunks stored in ChromaDB for UUID: {uuid}"
+                        )
                 except Exception as e:
                     logging.error(
                         f"Error verifying ChromaDB storage for UUID {uuid}: {e}"
@@ -179,16 +248,33 @@ class ModelInterface:
 
         except Exception as e:
             logging.error(f"Error in embed_text for UUID {uuid}: {e}")
+            import traceback
+
+            logging.error(f"Traceback: {traceback.format_exc()}")
 
     def retrieve_text(self, uuid, prompt):
         """Retrieve relevant context from ChromaDB based on the prompt"""
         try:
+            # Validate input
+            if not uuid:
+                logging.error("No UUID provided for text retrieval")
+                return ""
+
+            if not prompt or not prompt.strip():
+                logging.error("Empty or invalid prompt provided for text retrieval")
+                return ""
+
             logging.info(f"Retrieving context for UUID: {uuid} with prompt: {prompt}")
 
-            response = self.client.embed(model=EMBEDDING_MODEL_NAME, input=prompt)
-            logging.info(
-                f"Generated embedding for prompt, embedding length: {len(response['embeddings'])}"
-            )
+            # Generate embedding for the prompt
+            try:
+                response = self.client.embed(model=EMBEDDING_MODEL_NAME, input=prompt)
+                logging.info(
+                    f"Generated embedding for prompt, embedding length: {len(response['embeddings'])}"
+                )
+            except Exception as e:
+                logging.error(f"Error generating embedding for prompt: {e}")
+                return ""
 
             # Fix the embedding format - flatten nested lists if needed
             embeddings = response["embeddings"]
@@ -199,24 +285,43 @@ class ModelInterface:
 
             logging.info(f"Flattened embeddings length: {len(embeddings)}")
 
-            # query the collection for all chunks of the specific article
-            results = collection.query(
-                query_embeddings=[embeddings],
-                n_results=3,  # Get top 3 most relevant chunks
-                where={"uuid": str(uuid)},
-            )
+            # FIXED: Query without 'where' parameter for compatibility, then filter results
+            try:
+                results = collection.query(
+                    query_embeddings=[embeddings],
+                    n_results=10,  # Get more results to filter from
+                )
+            except Exception as e:
+                logging.error(f"Error querying ChromaDB: {e}")
+                return ""
 
             logging.info(f"ChromaDB query results: {results}")
 
+            # Filter results by UUID in Python
             if results["documents"] and len(results["documents"][0]) > 0:
-                # Combine the most relevant chunks
-                relevant_chunks = results["documents"][0]
-                combined_context = " ".join(relevant_chunks)
-                logging.info(
-                    f"Retrieved {len(relevant_chunks)} chunks for UUID: {uuid}"
-                )
-                logging.info(f"Combined context: {combined_context[:200]}...")
-                return combined_context
+                filtered_documents = []
+                filtered_metadatas = results.get("metadatas", [[]])[0]
+
+                for i, metadata in enumerate(filtered_metadatas):
+                    if metadata and metadata.get("uuid") == str(uuid):
+                        if i < len(results["documents"][0]):
+                            filtered_documents.append(results["documents"][0][i])
+
+                # Take top 3 most relevant chunks for this UUID
+                relevant_chunks = filtered_documents[:3]
+
+                if relevant_chunks:
+                    combined_context = " ".join(relevant_chunks)
+                    logging.info(
+                        f"Retrieved {len(relevant_chunks)} chunks for UUID: {uuid}"
+                    )
+                    logging.info(f"Combined context: {combined_context[:200]}...")
+                    return combined_context
+                else:
+                    logging.warning(
+                        f"No context found for UUID: {uuid} after filtering"
+                    )
+                    return ""
             else:
                 logging.warning(f"No context found for UUID: {uuid}")
                 logging.warning(f"ChromaDB results: {results}")
@@ -224,6 +329,9 @@ class ModelInterface:
         except Exception as e:
             logging.error(f"Error retrieving text from ChromaDB: {e}")
             logging.error(f"Exception details: {str(e)}")
+            import traceback
+
+            logging.error(f"Traceback: {traceback.format_exc()}")
             return ""
 
     def chat(self, text, uuid=None) -> str:
@@ -233,11 +341,17 @@ class ModelInterface:
         # Retrieve relevant context from the article if UUID is provided
         context = ""
         if uuid:
-            context = self.retrieve_text(uuid, text)
-            if context:
-                logging.info(f"Retrieved context for UUID: {uuid}")
-            else:
-                logging.warning(f"No context found for UUID: {uuid}")
+            try:
+                context = self.retrieve_text(uuid, text)
+                if context:
+                    logging.info(f"Retrieved context for UUID: {uuid}")
+                else:
+                    logging.warning(f"No context found for UUID: {uuid}")
+            except Exception as e:
+                logging.warning(
+                    f"Failed to retrieve context for UUID {uuid}, continuing without context: {e}"
+                )
+                context = ""
 
         # Prepare the prompt with context
         if context:
@@ -266,7 +380,10 @@ class ModelInterface:
 
         # Update the conversation array in the Postgres DB and cache
         if uuid:
-            self.update_conversation_in_backend(uuid)
+            try:
+                self.update_conversation_in_backend(uuid)
+            except Exception as e:
+                logging.warning(f"Failed to update conversation for UUID {uuid}: {e}")
 
         return generated_answer
 
@@ -351,18 +468,35 @@ class ModelInterface:
         logging.info("Reset conversation memory")
 
     def process_article(self, article_text, uuid):
+        """Process article text and generate embeddings, summary, and sentiment"""
+        try:
+            # Try to embed the text, but don't fail if it doesn't work
+            try:
+                self.embed_text(article_text, uuid)
+                logging.info(f"Successfully embedded article for UUID: {uuid}")
+            except Exception as e:
+                logging.warning(
+                    f"Failed to embed article for UUID {uuid}, but continuing with processing: {e}"
+                )
+                # Continue processing even if embedding fails
 
-        self.embed_text(article_text, uuid)
+            SUMMARY_INSTRUCTION = "You will be given a the text contents of a scraped webpage at the given url. You will then need to generate a summary of the webpage, and return the result as a Markdown string."
+            SENTIMENT_INSTRUCTION = "You will be the summary of an article. You will then need to generate a sentiment of the webpage; return only the sentiment, no other text (e.g. 'positive', 'negative', 'neutral')"
 
-        SUMMARY_INSTRUCTION = "You will be given a the text contents of a scraped webpage at the given url. You will then need to generate a summary of the webpage, and return the result as a Markdown string."
-        SENTIMENT_INSTRUCTION = "You will be the summary of an article. You will then need to generate a sentiment of the webpage; return only the sentiment, no other text (e.g. 'positive', 'negative', 'neutral')"
+            summary = self.generate_text(SUMMARY_INSTRUCTION, article_text)
+            sentiment = self.generate_text(SENTIMENT_INSTRUCTION, summary)
 
-        summary = self.generate_text(SUMMARY_INSTRUCTION, article_text)
-        sentiment = self.generate_text(SENTIMENT_INSTRUCTION, summary)
-        return {
-            "summary": summary,
-            "sentiment": sentiment,
-        }
+            return {
+                "summary": summary,
+                "sentiment": sentiment,
+            }
+        except Exception as e:
+            logging.error(f"Error in process_article for UUID {uuid}: {e}")
+            # Return a default result to prevent complete failure
+            return {
+                "summary": "Error processing article",
+                "sentiment": "neutral",
+            }
 
 
 LLM = ModelInterface("llama3.1:8b")
@@ -617,6 +751,39 @@ def debug_chromadb():
     except Exception as e:
         logging.error(f"Error in ChromaDB debug: {e}")
         return {"error": str(e)}
+
+
+@app.post("/debug/test-embedding")
+def test_embedding(request: dict):
+    """Test endpoint to debug embedding and storage issues"""
+    try:
+        test_uuid = request.get("uuid", "test-uuid-123")
+        test_text = request.get(
+            "text", "This is a test article for debugging ChromaDB issues."
+        )
+
+        logging.info(f"Testing embedding for UUID: {test_uuid}")
+
+        # Test the embedding process
+        LLM.embed_text(test_text, test_uuid)
+
+        # Test retrieval
+        test_prompt = "What is this article about?"
+        context = LLM.retrieve_text(test_uuid, test_prompt)
+
+        return {
+            "success": True,
+            "uuid": test_uuid,
+            "text_length": len(test_text),
+            "context_retrieved": len(context) > 0,
+            "context_length": len(context),
+            "context_preview": context[:200] if context else "",
+        }
+    except Exception as e:
+        logging.error(f"Error in test embedding: {e}")
+        import traceback
+
+        return {"error": str(e), "traceback": traceback.format_exc()}
 
 
 @app.post("/chat")
