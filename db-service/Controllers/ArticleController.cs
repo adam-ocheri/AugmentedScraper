@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace db_service.Controllers
 {
@@ -177,7 +178,9 @@ namespace db_service.Controllers
 
     public class ConversationUpdateRequest
     {
+        [JsonPropertyName("uuid")]
         public string Uuid { get; set; }
+        [JsonPropertyName("conversation")]
         public List<ConversationEntry> Conversation { get; set; }
     }
 } 

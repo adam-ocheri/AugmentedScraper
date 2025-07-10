@@ -40,11 +40,12 @@ type ProcessResult struct {
 }
 
 type TaskHistoryItem struct {
-	URL      string `json:"url"`
-	UUID     string `json:"uuid"`
-	Status   string `json:"status"`
-	Summary  string `json:"summary,omitempty"`
-	Sentiment string `json:"sentiment,omitempty"`
+	URL          string                `json:"url"`
+	UUID         string                `json:"uuid"`
+	Status       string                `json:"status"`
+	Summary      string                `json:"summary,omitempty"`
+	Sentiment    string                `json:"sentiment,omitempty"`
+	Conversation []ConversationEntry   `json:"conversation,omitempty"`
 }
 
 type TaskHistoryResponse struct {
@@ -54,22 +55,22 @@ type TaskHistoryResponse struct {
 // ArticleResultPayload matches the db-service model
 // Used to send the correct shape to db-service
 type ArticleResultPayload struct {
-	UUID         string                `json:"Uuid"`
-	URL          string                `json:"Url"`
-	Summary      string                `json:"Summary"`
-	Sentiment    string                `json:"Sentiment"`
-	Conversation []ConversationEntry   `json:"Conversation"`
+	UUID         string                `json:"uuid"`
+	URL          string                `json:"url"`
+	Summary      string                `json:"summary"`
+	Sentiment    string                `json:"sentiment"`
+	Conversation []ConversationEntry   `json:"conversation"`
 }
 
 type ConversationEntry struct {
-	Role    string `json:"Role"`
-	Content string `json:"Content"`
+	Role    string `json:"role"`
+	Content string `json:"content"`
 }
 
 // ConversationUpdateRequest represents a request to update conversation
 type ConversationUpdateRequest struct {
-	UUID         string              `json:"Uuid"`
-	Conversation []ConversationEntry `json:"Conversation"`
+	UUID         string              `json:"uuid"`
+	Conversation []ConversationEntry `json:"conversation"`
 }
 
 // ConversationUpdateResponse represents the response from conversation update

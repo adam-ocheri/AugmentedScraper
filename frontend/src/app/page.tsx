@@ -46,7 +46,7 @@ export default function Home() {
   const [chatLoading, setChatLoading] = useState(false);
   const [conversation, setConversation] = useState<ConversationEntry[]>([]);
 
-  const handleSubmit = async () => {
+  const handleSubmitUrl = async () => {
     if (!url.trim()) {
       setError("Please enter a valid URL");
       return;
@@ -87,6 +87,7 @@ export default function Home() {
       
       setTasks(prev => [newTask, ...prev]);
       setActiveArticle(newTask); // Set as active article
+      setConversation([]); // clear the conversation
       setUrl(""); // Clear the input after submission
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Failed to submit URL. Please try again.";
@@ -111,6 +112,24 @@ export default function Home() {
       };
       
       setConversation(prev => [...prev, userMessage]);
+      
+      // Also update the task's conversation data in the tasks array
+      setTasks(prev => prev.map(task => {
+        if (task.uuid === activeArticle.uuid) {
+          const updatedConversation = [...(task.conversation || []), userMessage];
+          return { ...task, conversation: updatedConversation };
+        }
+        return task;
+      }));
+      
+      // Update active article conversation as well
+      setActiveArticle(prev => {
+        if (prev && prev.uuid === activeArticle.uuid) {
+          const updatedConversation = [...(prev.conversation || []), userMessage];
+          return { ...prev, conversation: updatedConversation };
+        }
+        return prev;
+      });
       
       // Send chat request - don't add AI response here, let WebSocket handle it
       await axios.post(`${API_URL}/chat`, {
@@ -204,7 +223,13 @@ export default function Home() {
             {
               if (task.uuid === data.payload.uuid) {
                 console.log("Task found:", task.uuid, data.payload.uuid);
-                return { ...task, status: payload.status, summary: payload.result.summary, sentiment: payload.result.sentiment };
+                return { 
+                  ...task, 
+                  status: payload.status, 
+                  summary: payload.result.summary, 
+                  sentiment: payload.result.sentiment,
+                  conversation: task.conversation || [] // Preserve existing conversation data
+                };
               }
               console.log("Task not found:", task.uuid, data.payload.uuid);
               return task;
@@ -216,7 +241,13 @@ export default function Home() {
             console.log("Active article found and updating:");
             console.log("activeArticle?.uuid:", activeArticle?.uuid);
             console.log("payload.uuid:", payload.uuid);
-            setActiveArticle(prev => prev ? { ...prev, status: payload.status, summary: payload.result.summary, sentiment: payload.result.sentiment } : null);
+            setActiveArticle(prev => prev ? { 
+              ...prev, 
+              status: payload.status, 
+              summary: payload.result.summary, 
+              sentiment: payload.result.sentiment,
+              conversation: prev.conversation || [] // Preserve existing conversation data
+            } : null);
           }
           else {
             console.log("Active article not found or not matching:");
@@ -240,6 +271,24 @@ export default function Home() {
             setConversation(prev => {
               // Add the assistant message - WebSocket is the single source of truth
               return [...prev, assistantMessage];
+            });
+            
+            // Also update the task's conversation data in the tasks array
+            setTasks(prev => prev.map(task => {
+              if (task.uuid === payload.uuid) {
+                const updatedConversation = [...(task.conversation || []), assistantMessage];
+                return { ...task, conversation: updatedConversation };
+              }
+              return task;
+            }));
+            
+            // Update active article conversation as well
+            setActiveArticle(prev => {
+              if (prev && prev.uuid === payload.uuid) {
+                const updatedConversation = [...(prev.conversation || []), assistantMessage];
+                return { ...prev, conversation: updatedConversation };
+              }
+              return prev;
             });
             
             // Stop showing loading state
@@ -387,7 +436,7 @@ export default function Home() {
                   disabled={loading}
                 />
                 <button
-                  onClick={handleSubmit}
+                  onClick={handleSubmitUrl}
                   disabled={loading || !url.trim()}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >

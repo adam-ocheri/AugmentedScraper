@@ -278,7 +278,7 @@ class ModelInterface:
             for message in self.memory:
                 if message["role"] != "system":  # Skip system messages
                     conversation_entries.append(
-                        {"Role": message["role"], "Content": message["content"]}
+                        {"role": message["role"], "content": message["content"]}
                     )
 
             # Prepare the request payload
@@ -306,7 +306,7 @@ class ModelInterface:
     def load_conversation_from_backend(self, uuid: str) -> bool:
         """Load existing conversation from backend for the given UUID"""
         try:
-            # Try to get existing conversation from backend
+            # Try to get existing conversation from backend database directly
             backend_url = f"http://backend:8080/tasks"
             response = requests.get(backend_url, timeout=5)
 
@@ -327,9 +327,11 @@ class ModelInterface:
                                     }
                                 )
                             logging.info(
-                                f"Loaded existing conversation for UUID: {uuid}"
+                                f"Loaded existing conversation for UUID: {uuid} with {len(task['conversation'])} entries"
                             )
                             return True
+                        else:
+                            logging.info(f"No conversation found for UUID: {uuid}")
                         break
             return False
         except Exception as e:
