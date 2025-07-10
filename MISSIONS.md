@@ -38,7 +38,8 @@
 
 # MISSION 7 | Status: Pending | Details: Add early validation to identify that the incoming string is indeed a valid URL string (at the go backend `/submit` route), and if not valid return an error message to the frontend saying "Invalid URL used!"
 
-    + A) Also, will need to add validation and string manipulations to ensure we are redundantly not re-processing URLs; i.e if already have `https://www.example.com` stored, if I then add `http://www.example.com` or `www.example.com` or `example.com`, it should all be treated as the same url (because it is the SAME url)
+    + A) First must make sure that we are getting a valid https url (if not, return error message that will be displayed in the frontend as an alert, `alert("Only valid https links are allowed! please make sure you are using a public link, such as 'https://www.example.com'")`)
+    + B) Then need to make sure that the url actually returns 200 (in case the user is a smart ass hacker and tries to send something like 'https://www.hahanothinghere.i.crashed.your.system.com'), and if it does not return 200, the frontend needs to get an error message and display as alert `(alert("The provided link is invalid or cannot be loaded! please try again later or try a different link")`)
 
 # MISSION 8 | Status: Pending | Details: Re-consider possible redundancy at the `status:` redis Key Pattern; since there is already the `url_task:` that has a status as well, and what actual use do you have for the `status/{uuid}` route anyway?
 
@@ -51,7 +52,7 @@
     - C) Then there might be a need for a `useEffect` that is triggered when the `activeArticle` has been changed, to fetch that article/task from the backend
     - D) NOTE: since users may make concurrent requests, need to make sure that the `activeArticle` is only updated via the websocket (instead of the old `result` state) only if the `activeArticle.uuid === payload.uuid`
 
-# MISSION 11 | Status: Pending | Details: add full support for having a conversation after getting result from article
+# MISSION 11 | Status: Completed | Details: add full support for having a conversation after getting result from article
 
     - A) Add support for the `ConversationEntry` so that conversation data can be stored in the DB and Redis cache
     - B) Once added conversations array to the DB/Cache data structures, ensure that nothing breaks in the current implementation

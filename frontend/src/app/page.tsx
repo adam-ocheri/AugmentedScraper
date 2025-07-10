@@ -90,8 +90,26 @@ export default function Home() {
       setConversation([]); // clear the conversation
       setUrl(""); // Clear the input after submission
     } catch (err: unknown) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to submit URL. Please try again.";
-      setError(errorMessage);
+      // Handle specific validation errors from the backend
+      if (err && typeof err === 'object' && 'response' in err && err.response && typeof err.response === 'object' && 'status' in err.response && 'data' in err.response) {
+        const axiosError = err as { response: { status: number; data: string } };
+        if (axiosError.response.status === 400) {
+          const errorMessage = axiosError.response.data;
+          if (errorMessage.includes("Only valid https links are allowed")) {
+            alert("Only valid https links are allowed! please make sure you are using a public link, such as 'https://www.example.com'");
+          } else if (errorMessage.includes("The provided link is invalid or cannot be loaded")) {
+            alert("The provided link is invalid or cannot be loaded! please try again later or try a different link");
+          } else {
+            setError(errorMessage);
+          }
+        } else {
+          const errorMessage = err instanceof Error ? err.message : "Failed to submit URL. Please try again.";
+          setError(errorMessage);
+        }
+      } else {
+        const errorMessage = err instanceof Error ? err.message : "Failed to submit URL. Please try again.";
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
