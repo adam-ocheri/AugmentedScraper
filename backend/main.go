@@ -27,6 +27,9 @@ func main() {
 	http.HandleFunc("/status/", middleware.CORS(handlers.HandleStatus))
 	http.HandleFunc("/tasks", middleware.CORS(handlers.HandleTasks))
 	http.HandleFunc("/conversation/update", middleware.CORS(handlers.HandleConversationUpdate))
+	http.HandleFunc("/inform-model-loaded", middleware.CORS(func(w http.ResponseWriter, r *http.Request) {
+		handlers.HandleModelLoaded(w, r, hub)
+	}))
 	http.HandleFunc("/chat", middleware.CORS(func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleChat(w, r, hub)
 	}))

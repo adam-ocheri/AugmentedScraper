@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"backend/models"
 	"backend/services"
+	"backend/websocket"
 )
 
 // HandleStatus handles task status requests
@@ -94,4 +95,40 @@ func HandleStatus(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
+}
+
+// HandleModelLoaded handles the notification that models are ready
+func HandleModelLoaded(w http.ResponseWriter, r *http.Request, hub *websocket.Hub) {
+	if r.Method != "POST" {
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	log.Println("Received notification that models are loaded and ready")
+
+	// Set a flag in Redis to indicate models are ready
+	err := services.GetRedisClient().Set(services.GetContext(), "models:ready", "true", 0).Err()
+	if err != nil {
+		log.Printf("Failed to set models ready flag: %v", err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Broadcast to websocket clients that models are ready
+	wsMessage := models.WSMessage{
+		Type: "models_ready",
+		Payload: map[string]interface{}{
+			"ready": true,
+		},
+	}
+	
+	if messageBytes, err := json.Marshal(wsMessage); err == nil {
+		hub.GetBroadcastChannel() <- messageBytes
+		log.Printf("Broadcasted models ready message to WebSocket clients")
+	} else {
+		log.Printf("Failed to marshal WebSocket message: %v", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 } 

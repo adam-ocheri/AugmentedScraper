@@ -14,6 +14,7 @@ import os
 from utils import chunk_text, scrape_url
 
 EMBEDDING_MODEL_NAME = "nomic-embed-text:latest"
+LLM_MODEL_NAME = "llama3.1:8b"
 
 # Initialize ChromaDB client with proper configuration
 chromadb_host = os.getenv("CHROMADB_HOST", "http://localhost:8000")
@@ -27,6 +28,80 @@ except Exception as e:
     # Collection might already exist
     collection = chroma_db_client.get_collection(name="articles")
     logging.info("Using existing ChromaDB collection: articles")
+
+# Global flag for model readiness
+models_ready = False
+models_ready_lock = threading.Lock()
+
+
+def check_models_ready():
+    """Check if required models are loaded in Ollama"""
+    try:
+        response = requests.get("http://localhost:11434/api/ps", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            loaded_models = [model["name"] for model in data.get("models", [])]
+
+            required_models = [LLM_MODEL_NAME, EMBEDDING_MODEL_NAME]
+            ready = all(model in loaded_models for model in required_models)
+
+            logging.info(f"Loaded models: {loaded_models}")
+            logging.info(f"Required models: {required_models}")
+            logging.info(f"Models ready: {ready}")
+
+            return ready
+    except Exception as e:
+        logging.error(f"Error checking models: {e}")
+    return False
+
+
+def notify_backend_models_ready():
+    """Notify the backend that models are ready"""
+    try:
+        backend_url = os.getenv("BACKEND_URL", "http://backend:8080")
+        response = requests.post(f"{backend_url}/inform-model-loaded", timeout=10)
+        if response.status_code == 200:
+            logging.info("Successfully notified backend that models are ready")
+        else:
+            logging.error(f"Failed to notify backend: {response.status_code}")
+    except Exception as e:
+        logging.error(f"Error notifying backend: {e}")
+
+
+def model_readiness_checker():
+    """Background thread to check model readiness"""
+    global models_ready
+
+    # Check if models are already ready (in case of container restart)
+    if check_models_ready():
+        with models_ready_lock:
+            models_ready = True
+        logging.info("Models already loaded and ready!")
+        notify_backend_models_ready()
+        return
+
+    # Polling intervals: start fast, then slow down
+    # polling_intervals = [2, 2, 2, 5, 5, 10, 10, 10]
+    # current_interval_index = 0
+
+    logging.info("Starting model readiness checker...")
+
+    while not models_ready:
+        if check_models_ready():
+            with models_ready_lock:
+                models_ready = True
+
+            logging.info("All required models are loaded and ready!")
+            notify_backend_models_ready()
+            break
+
+        # polling interval
+        interval = 5
+
+        logging.info(f"Models not ready yet, checking again in {interval} seconds...")
+        time.sleep(interval)
+
+    logging.info("Model readiness checker finished")
 
 
 class ModelInterface:
@@ -489,9 +564,14 @@ r = redis.Redis(host="redis", port=6379, db=0, decode_responses=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Start the model readiness checker thread
+    model_checker_thread = threading.Thread(target=model_readiness_checker, daemon=True)
+    model_checker_thread.start()
+
     # Start the worker thread
-    thread = threading.Thread(target=redis_worker, daemon=True)
-    thread.start()
+    worker_thread = threading.Thread(target=redis_worker, daemon=True)
+    worker_thread.start()
+
     yield
     # (Optional cleanup code can go here)
 

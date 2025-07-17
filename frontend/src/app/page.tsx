@@ -41,6 +41,10 @@ export default function Home() {
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   
+  // Model readiness state
+  const [modelsReady, setModelsReady] = useState(false);
+  const [modelLoading, setModelLoading] = useState(true);
+  
   // Conversation state
   const [chatMessage, setChatMessage] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
@@ -313,6 +317,13 @@ export default function Home() {
             setChatLoading(false);
           }
         }
+        
+        // Handle model readiness messages
+        if (data.type === "models_ready") {
+          console.log("Models ready message received:", data);
+          setModelsReady(true);
+          setModelLoading(false);
+        }
       } catch (err) {
         console.error("Error parsing WebSocket message:", err);
       }
@@ -353,6 +364,23 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Model Loading Overlay */}
+      {modelLoading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md mx-4 text-center">
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading AI Models</h3>
+            <p className="text-gray-600">
+              The AI models are being downloaded and loaded into memory. This may take a few minutes on first startup.
+            </p>
+            <div className="mt-4 text-sm text-gray-500">
+              <p>Downloading: llama3.1:8b</p>
+              <p>Downloading: nomic-embed-text:latest</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mobile sidebar toggle */}
       <div className="lg:hidden fixed top-4 left-4 z-50">
         <button
@@ -451,11 +479,11 @@ export default function Home() {
                   onChange={(e) => setUrl(e.target.value)}
                   placeholder="Enter a URL to analyze (e.g., https://example.com/article)"
                   className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  disabled={loading}
+                  disabled={loading || !modelsReady}
                 />
                 <button
                   onClick={handleSubmitUrl}
-                  disabled={loading || !url.trim()}
+                  disabled={loading || !url.trim() || !modelsReady}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {loading ? "Processing..." : "Analyze"}
@@ -564,11 +592,11 @@ export default function Home() {
                         onKeyPress={(e) => e.key === 'Enter' && handleChatSubmit()}
                         placeholder="Ask a question about this article..."
                         className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        disabled={chatLoading}
+                        disabled={chatLoading || !modelsReady}
                       />
                       <button
                         onClick={handleChatSubmit}
-                        disabled={chatLoading || !chatMessage.trim()}
+                        disabled={chatLoading || !chatMessage.trim() || !modelsReady}
                         className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         {chatLoading ? (
