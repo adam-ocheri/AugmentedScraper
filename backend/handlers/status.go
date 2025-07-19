@@ -131,4 +131,55 @@ func HandleModelLoaded(w http.ResponseWriter, r *http.Request, hub *websocket.Hu
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+// HandleIsModelLoaded checks if models are loaded by querying the LLM server
+func HandleIsModelLoaded(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "GET" {
+		http.Error(w, "Invalid method", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Check Redis first (faster)
+	redisFlag, err := services.GetRedisClient().Get(services.GetContext(), "models:ready").Result()
+	if err == nil && redisFlag == "true" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ready": true,
+			"source": "redis_cache",
+		})
+		return
+	}
+
+	// If not in Redis, check with LLM server
+	llmServerURL := "http://llm-server:8000/is-model-loaded"
+	resp, err := http.Get(llmServerURL)
+	if err != nil {
+		log.Printf("Failed to check model status with LLM server: %v", err)
+		http.Error(w, "Failed to check model status", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		log.Printf("LLM server returned status %d", resp.StatusCode)
+		http.Error(w, "LLM server error", http.StatusInternalServerError)
+		return
+	}
+
+	// Forward the response from LLM server
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(resp.StatusCode)
+	
+	// Copy the response body
+	var response map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		log.Printf("Failed to decode LLM server response: %v", err)
+		http.Error(w, "Failed to decode response", http.StatusInternalServerError)
+		return
+	}
+	
+	// Add source information
+	response["source"] = "llm_server"
+	json.NewEncoder(w).Encode(response)
 } 

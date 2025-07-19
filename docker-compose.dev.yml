@@ -26,7 +26,7 @@ services:
               count: all
               capabilities: [gpu]
     restart: unless-stopped
-    entrypoint: ["/bin/bash", "/entrypoint.sh"]
+    entrypoint: ["/bin/bash", "-c", "tr -d '\\r' < /entrypoint.sh > /tmp/entrypoint.sh && chmod +x /tmp/entrypoint.sh && /bin/bash /tmp/entrypoint.sh"]
 
   backend:
     build: ./backend

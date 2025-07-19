@@ -49,8 +49,8 @@ func (h *Hub) Run() {
 				select {
 				case client.send <- message:
 				default:
-					close(client.send)
 					delete(h.clients, client)
+					close(client.send)
 				}
 			}
 			h.mutex.RUnlock()

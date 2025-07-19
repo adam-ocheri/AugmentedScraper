@@ -30,6 +30,7 @@ func main() {
 	http.HandleFunc("/inform-model-loaded", middleware.CORS(func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleModelLoaded(w, r, hub)
 	}))
+	http.HandleFunc("/is-model-loaded", middleware.CORS(handlers.HandleIsModelLoaded))
 	http.HandleFunc("/chat", middleware.CORS(func(w http.ResponseWriter, r *http.Request) {
 		handlers.HandleChat(w, r, hub)
 	}))

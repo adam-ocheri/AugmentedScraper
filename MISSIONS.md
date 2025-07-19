@@ -82,3 +82,5 @@
     - A) This means creating websocket/pubsub callbacks for each of these steps
     - B) These callbacks would need to be triggered by the llm-server, pushing messages to the backend server
     - C) The backend server then forwards these messages to the front
+
+# MISSION 14 | Status: Pending | Details: Force the `ollama-entrypoint.sh` during the docker compose build stage to be LF instead of CRLF!!!

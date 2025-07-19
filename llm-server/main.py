@@ -37,17 +37,21 @@ models_ready_lock = threading.Lock()
 def check_models_ready():
     """Check if required models are loaded in Ollama"""
     try:
-        response = requests.get("http://localhost:11434/api/ps", timeout=5)
+        logging.error(
+            "------------------------------>Checking models ready<------------------------------"
+        )
+        response = requests.get("http://ollama:11434/api/ps", timeout=5)
         if response.status_code == 200:
+            logging.error(f"Ollama response: {response.json()}")
             data = response.json()
             loaded_models = [model["name"] for model in data.get("models", [])]
 
-            required_models = [LLM_MODEL_NAME, EMBEDDING_MODEL_NAME]
+            required_models = [LLM_MODEL_NAME]  # , EMBEDDING_MODEL_NAME]
             ready = all(model in loaded_models for model in required_models)
 
-            logging.info(f"Loaded models: {loaded_models}")
-            logging.info(f"Required models: {required_models}")
-            logging.info(f"Models ready: {ready}")
+            logging.error(f"Loaded models: {loaded_models}")
+            logging.error(f"Required models: {required_models}")
+            logging.error(f"Models ready: {ready}")
 
             return ready
     except Exception as e:
@@ -661,6 +665,28 @@ def redis_worker():
 @app.get("/health")
 def health_check():
     return {"status": "ok", "service": "llm-server"}
+
+
+@app.get("/is-model-loaded")
+def is_model_loaded():
+    """Check if required models are loaded and ready"""
+    global models_ready
+
+    with models_ready_lock:
+        current_status = models_ready
+
+    # Also check Redis for the flag (in case of container restart)
+    try:
+        redis_flag = r.get("models:ready")
+        redis_ready = redis_flag == "true"
+    except Exception as e:
+        logging.error(f"Error checking Redis flag: {e}")
+        redis_ready = False
+
+    # Models are ready if either the global flag is True or Redis flag is set
+    ready = current_status or redis_ready
+
+    return {"ready": ready, "models_ready": current_status, "redis_ready": redis_ready}
 
 
 @app.post("/chat")

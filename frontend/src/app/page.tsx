@@ -210,7 +210,24 @@ export default function Home() {
   };
 
   useEffect(() => {
-    // Fetch task history on component mount
+    // Check model status and fetch task history on component mount
+    const checkModelStatus = async () => {
+      try {
+        const response = await axios.get(`${API_URL}/is-model-loaded`);
+        if (response.data.ready) {
+          setModelsReady(true);
+          setModelLoading(false);
+          console.log("Models are ready");
+        } else {
+          console.log("Models not ready yet, waiting for WebSocket message...");
+        }
+      } catch (err) {
+        console.error("Failed to check model status:", err);
+        // If we can't check, assume models are not ready and wait for WebSocket
+      }
+    };
+
+    checkModelStatus();
     fetchTaskHistory();
   }, []);
 

@@ -7,7 +7,7 @@ echo "Starting Ollama with automatic model setup..."
 ollama serve &
 
 # Wait a bit more for GPU initialization to complete
-# sleep 10
+sleep 10
 
 # Pull the model if it doesn't exist
 echo "Checking if model exists..."
